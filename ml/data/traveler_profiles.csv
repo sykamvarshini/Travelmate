@@ -1,0 +1,351 @@
+user_id,age,travel_style,food_pref,activity_level,budget,primary_interests
+1,22,Solo,Vegetarian,High Intensity,Luxury,History|Adventure|Spiritual|Nature
+2,62,Solo,Non-Vegetarian,Relaxed,Luxury,Temples|Beaches|Spiritual|Mountains
+3,20,Couple,Non-Vegetarian,Moderate,Luxury,Nightlife|Photography|Food|Temples
+4,30,Solo,Vegan,Moderate,Budget,Photography|Temples
+5,27,Family,Vegetarian,Moderate,Mid-Range,Mountains|Temples
+6,30,Solo,Vegetarian,High Intensity,Mid-Range,Wildlife|Food|Mountains|Temples
+7,35,Couple,Vegan,Relaxed,Budget,Mountains|Beaches|Nightlife|Adventure
+8,22,Friends,Non-Vegetarian,Moderate,Mid-Range,Wildlife|Nightlife|Culture
+9,27,Family,Non-Vegetarian,High Intensity,Luxury,Museums|Nightlife|Spiritual|Mountains
+10,27,Couple,Non-Vegetarian,High Intensity,Mid-Range,Temples|History|Nightlife
+11,20,Couple,Any,Moderate,Budget,Relaxation|Culture
+12,27,Family,Any,High Intensity,Mid-Range,Nightlife|Wildlife
+13,24,Family,Vegan,High Intensity,Luxury,Adventure|Photography
+14,42,Friends,Any,Relaxed,Budget,Adventure|Nature|Food
+15,22,Couple,Vegetarian,Moderate,Mid-Range,Nature|Relaxation|Nightlife|Temples
+16,55,Family,Vegetarian,High Intensity,Luxury,Spiritual|Beaches|Nightlife|Photography
+17,30,Family,Non-Vegetarian,Moderate,Budget,History|Temples
+18,30,Couple,Non-Vegetarian,Relaxed,Mid-Range,Museums|Mountains|Nightlife|History
+19,24,Solo,Vegan,Moderate,Budget,Culture|Wildlife|Beaches|Mountains
+20,20,Couple,Vegetarian,High Intensity,Budget,Mountains|Museums|Photography|Wildlife
+21,24,Friends,Any,Relaxed,Luxury,Nature|History|Food|Shopping
+22,27,Family,Any,High Intensity,Mid-Range,Nightlife|Museums|Culture
+23,22,Couple,Vegetarian,High Intensity,Luxury,Mountains|Culture
+24,27,Couple,Vegetarian,Relaxed,Budget,Mountains|Photography
+25,20,Family,Vegan,High Intensity,Mid-Range,Food|Adventure
+26,27,Couple,Non-Vegetarian,Moderate,Mid-Range,Museums|Shopping|Spiritual|Wildlife
+27,27,Solo,Vegan,Moderate,Mid-Range,Nightlife|Temples
+28,55,Solo,Any,High Intensity,Mid-Range,Nightlife|Museums|Mountains|Beaches
+29,22,Couple,Any,Relaxed,Mid-Range,Adventure|Food
+30,24,Family,Any,High Intensity,Budget,Adventure|Spiritual|Mountains
+31,20,Solo,Non-Vegetarian,Relaxed,Mid-Range,Museums|Relaxation
+32,55,Friends,Vegetarian,Relaxed,Mid-Range,Spiritual|Temples
+33,20,Friends,Any,Moderate,Mid-Range,Museums|Relaxation|Spiritual
+34,62,Friends,Non-Vegetarian,Relaxed,Luxury,Adventure|History
+35,62,Solo,Any,High Intensity,Luxury,Culture|Beaches|Spiritual|Shopping
+36,24,Solo,Vegetarian,High Intensity,Budget,Mountains|Spiritual|Nature|Museums
+37,42,Solo,Vegetarian,Moderate,Luxury,Adventure|Shopping|Spiritual|Beaches
+38,62,Family,Vegan,Relaxed,Mid-Range,Adventure|Nightlife|Photography
+39,42,Couple,Vegetarian,Relaxed,Mid-Range,Nightlife|History|Wildlife|Culture
+40,22,Solo,Vegan,Relaxed,Budget,Adventure|Food|History|Nature
+41,35,Family,Vegan,High Intensity,Luxury,Wildlife|Spiritual
+42,62,Solo,Vegetarian,Relaxed,Mid-Range,Spiritual|Food|History|Nightlife
+43,22,Solo,Non-Vegetarian,High Intensity,Mid-Range,Food|Nature|History|Relaxation
+44,27,Family,Any,Moderate,Budget,Wildlife|History|Beaches|Mountains
+45,20,Family,Non-Vegetarian,High Intensity,Mid-Range,Nightlife|History
+46,62,Friends,Non-Vegetarian,High Intensity,Budget,Beaches|Mountains|Spiritual|Photography
+47,35,Couple,Vegan,Relaxed,Mid-Range,Nature|Beaches|History
+48,27,Couple,Any,High Intensity,Luxury,Mountains|Culture|Relaxation|Food
+49,24,Couple,Non-Vegetarian,Moderate,Budget,Relaxation|Museums
+50,24,Family,Non-Vegetarian,Moderate,Budget,Relaxation|Nightlife|Photography
+51,22,Friends,Non-Vegetarian,Relaxed,Mid-Range,Spiritual|Wildlife
+52,35,Family,Non-Vegetarian,Moderate,Mid-Range,Adventure|Beaches
+53,30,Solo,Any,High Intensity,Luxury,Culture|Nightlife|Food
+54,35,Solo,Non-Vegetarian,High Intensity,Mid-Range,Museums|History
+55,20,Solo,Any,High Intensity,Luxury,Temples|Culture|Photography|Spiritual
+56,22,Friends,Any,Relaxed,Luxury,Adventure|History|Beaches|Photography
+57,62,Couple,Vegan,High Intensity,Mid-Range,Temples|Mountains|Nightlife
+58,22,Family,Any,High Intensity,Mid-Range,History|Nightlife|Temples|Culture
+59,62,Couple,Any,High Intensity,Luxury,Temples|Nightlife
+60,24,Family,Vegan,Moderate,Budget,Food|Spiritual|Beaches
+61,42,Family,Non-Vegetarian,High Intensity,Mid-Range,Wildlife|Museums|Nightlife
+62,24,Solo,Vegan,Relaxed,Budget,Food|Nightlife|Spiritual
+63,30,Couple,Vegetarian,Relaxed,Mid-Range,Nature|Beaches
+64,22,Friends,Non-Vegetarian,High Intensity,Luxury,Museums|Nightlife|Shopping
+65,42,Friends,Vegetarian,Relaxed,Mid-Range,Adventure|Nature|Nightlife
+66,27,Couple,Non-Vegetarian,Relaxed,Mid-Range,Food|Wildlife|Beaches|Museums
+67,24,Friends,Any,High Intensity,Luxury,Food|Museums|Shopping|Culture
+68,62,Friends,Any,Moderate,Budget,Wildlife|Nature|Photography|Museums
+69,30,Friends,Vegan,Relaxed,Mid-Range,Adventure|History|Wildlife|Mountains
+70,35,Family,Any,High Intensity,Budget,Mountains|Nature|Spiritual|Adventure
+71,27,Solo,Any,Moderate,Budget,Temples|Culture|Food
+72,27,Friends,Vegetarian,High Intensity,Mid-Range,Museums|Relaxation|Shopping
+73,55,Solo,Any,High Intensity,Luxury,History|Relaxation|Temples
+74,62,Couple,Any,Relaxed,Mid-Range,Adventure|History|Temples
+75,35,Friends,Vegetarian,Moderate,Luxury,Nature|Spiritual|Wildlife|Museums
+76,20,Solo,Vegetarian,Moderate,Mid-Range,Temples|Nature|Wildlife|Spiritual
+77,35,Couple,Any,Moderate,Mid-Range,Culture|Museums|Relaxation
+78,30,Solo,Vegetarian,Moderate,Budget,Beaches|Photography|Food
+79,22,Solo,Vegetarian,High Intensity,Budget,Adventure|Museums
+80,27,Couple,Non-Vegetarian,Moderate,Luxury,Nightlife|Mountains|Shopping
+81,30,Family,Vegetarian,Relaxed,Mid-Range,Shopping|Museums
+82,22,Solo,Any,High Intensity,Budget,Shopping|Nightlife|Temples
+83,22,Couple,Vegan,High Intensity,Luxury,Photography|Relaxation
+84,22,Solo,Vegan,Relaxed,Luxury,Food|Temples|Nightlife
+85,35,Solo,Any,Moderate,Luxury,Spiritual|Wildlife|Mountains
+86,55,Couple,Vegan,High Intensity,Luxury,Nature|Photography|Food
+87,55,Friends,Vegan,Moderate,Budget,Spiritual|Photography|Shopping
+88,22,Family,Any,Moderate,Budget,Adventure|Relaxation|Wildlife
+89,55,Family,Vegan,Moderate,Mid-Range,Wildlife|Adventure
+90,30,Family,Non-Vegetarian,High Intensity,Mid-Range,Beaches|Food|Adventure|Mountains
+91,55,Couple,Any,Relaxed,Budget,Wildlife|Nightlife|Photography|Museums
+92,30,Couple,Vegan,Moderate,Luxury,Photography|Adventure|History
+93,62,Family,Vegan,High Intensity,Mid-Range,Photography|Food|Culture
+94,30,Family,Non-Vegetarian,Moderate,Budget,Adventure|Mountains|Photography
+95,62,Couple,Any,Moderate,Luxury,Adventure|Photography
+96,62,Family,Vegan,Relaxed,Mid-Range,Spiritual|Adventure
+97,24,Family,Non-Vegetarian,Moderate,Budget,Photography|Food
+98,20,Family,Vegetarian,Relaxed,Luxury,Nature|Nightlife|Relaxation|Wildlife
+99,30,Friends,Vegetarian,Moderate,Mid-Range,Wildlife|Culture|Nature
+100,22,Solo,Vegetarian,Relaxed,Budget,Wildlife|Mountains|Shopping
+101,30,Solo,Any,High Intensity,Luxury,Mountains|Food
+102,27,Friends,Any,Moderate,Luxury,Museums|Wildlife|History
+103,20,Solo,Vegan,High Intensity,Budget,Nightlife|Adventure
+104,24,Couple,Non-Vegetarian,Relaxed,Mid-Range,Food|Mountains
+105,55,Friends,Vegan,High Intensity,Mid-Range,Beaches|Adventure|History
+106,22,Couple,Non-Vegetarian,Moderate,Budget,Relaxation|Museums|Nightlife
+107,62,Couple,Vegetarian,Relaxed,Mid-Range,Nature|History|Museums|Mountains
+108,30,Friends,Vegan,High Intensity,Mid-Range,Wildlife|Photography
+109,30,Friends,Any,High Intensity,Mid-Range,Mountains|Shopping|Beaches
+110,30,Solo,Vegetarian,High Intensity,Mid-Range,Adventure|Nightlife
+111,20,Couple,Vegan,Relaxed,Luxury,Food|Nightlife|Wildlife
+112,42,Friends,Any,Moderate,Mid-Range,Wildlife|Culture
+113,22,Couple,Vegan,High Intensity,Mid-Range,Temples|Photography|Wildlife
+114,62,Solo,Vegan,Relaxed,Mid-Range,Mountains|Culture|History
+115,62,Solo,Vegetarian,Relaxed,Luxury,Spiritual|Food|Wildlife|Temples
+116,35,Friends,Vegan,High Intensity,Budget,Wildlife|Relaxation|Beaches|Adventure
+117,30,Friends,Non-Vegetarian,High Intensity,Budget,Wildlife|Mountains|Beaches|Nightlife
+118,30,Solo,Any,Relaxed,Luxury,Temples|Mountains|Adventure|Spiritual
+119,24,Friends,Any,Moderate,Mid-Range,History|Food|Photography|Museums
+120,27,Friends,Non-Vegetarian,Relaxed,Mid-Range,Nature|Temples|Adventure|Shopping
+121,42,Family,Vegan,High Intensity,Luxury,History|Spiritual|Beaches|Museums
+122,55,Couple,Vegan,High Intensity,Luxury,Food|Wildlife|Culture
+123,42,Friends,Non-Vegetarian,High Intensity,Mid-Range,Spiritual|Adventure|Photography
+124,27,Friends,Any,High Intensity,Mid-Range,Culture|Photography
+125,42,Couple,Vegan,Relaxed,Mid-Range,Beaches|Nature|Food
+126,22,Friends,Any,High Intensity,Budget,Photography|Nature
+127,22,Friends,Any,High Intensity,Budget,Culture|Shopping|Photography
+128,35,Friends,Any,High Intensity,Budget,Nightlife|Photography|Relaxation
+129,22,Couple,Vegetarian,Moderate,Budget,Nightlife|History|Adventure|Photography
+130,22,Friends,Vegetarian,Relaxed,Mid-Range,Photography|History
+131,20,Family,Non-Vegetarian,High Intensity,Mid-Range,Culture|Temples|Nature
+132,24,Couple,Any,High Intensity,Luxury,Mountains|Shopping
+133,27,Friends,Vegan,Moderate,Mid-Range,Nature|Adventure|Wildlife|Nightlife
+134,20,Friends,Vegetarian,Moderate,Mid-Range,Nightlife|Food|Nature
+135,30,Friends,Any,Moderate,Budget,History|Wildlife|Museums|Adventure
+136,27,Friends,Vegan,Relaxed,Luxury,Culture|Shopping|History|Photography
+137,42,Family,Vegetarian,High Intensity,Luxury,Shopping|Spiritual
+138,55,Family,Vegan,Relaxed,Luxury,Shopping|Relaxation
+139,27,Family,Non-Vegetarian,High Intensity,Budget,Relaxation|Photography|Museums|Nightlife
+140,20,Family,Non-Vegetarian,Relaxed,Mid-Range,Beaches|Shopping|Culture
+141,35,Friends,Vegan,High Intensity,Luxury,Adventure|Nature
+142,30,Couple,Vegan,High Intensity,Mid-Range,Museums|Spiritual|Wildlife
+143,22,Friends,Non-Vegetarian,High Intensity,Luxury,Nature|Relaxation
+144,42,Family,Vegetarian,Moderate,Luxury,Relaxation|Temples
+145,22,Friends,Vegan,High Intensity,Mid-Range,Nightlife|Photography|Museums
+146,35,Solo,Vegan,High Intensity,Budget,Adventure|Wildlife|Beaches|Shopping
+147,22,Friends,Non-Vegetarian,Relaxed,Budget,History|Nightlife|Temples|Mountains
+148,30,Friends,Non-Vegetarian,Moderate,Mid-Range,Mountains|Adventure
+149,35,Friends,Vegetarian,Moderate,Luxury,Photography|Museums|Nature|Temples
+150,42,Family,Non-Vegetarian,Moderate,Mid-Range,Photography|Culture
+151,27,Family,Vegan,Relaxed,Mid-Range,Nightlife|Culture
+152,30,Couple,Any,Relaxed,Luxury,Spiritual|Museums
+153,27,Solo,Non-Vegetarian,Relaxed,Luxury,Relaxation|Culture
+154,27,Solo,Vegan,Relaxed,Luxury,Adventure|Shopping|Museums|Relaxation
+155,20,Family,Vegan,Relaxed,Budget,Nature|Food
+156,20,Couple,Non-Vegetarian,High Intensity,Mid-Range,Culture|Relaxation
+157,20,Couple,Any,High Intensity,Budget,Beaches|Nature|Photography
+158,22,Friends,Vegetarian,Moderate,Luxury,Relaxation|Culture|Food
+159,27,Solo,Vegan,Moderate,Luxury,Relaxation|Spiritual|Nightlife|Food
+160,20,Solo,Vegetarian,Moderate,Luxury,Spiritual|Temples|Museums
+161,55,Solo,Non-Vegetarian,Relaxed,Budget,Culture|Shopping
+162,30,Family,Any,High Intensity,Luxury,Shopping|Food|History
+163,42,Solo,Non-Vegetarian,Moderate,Mid-Range,Mountains|Spiritual|Nightlife|Relaxation
+164,27,Friends,Any,High Intensity,Budget,Spiritual|Wildlife|Temples
+165,35,Friends,Non-Vegetarian,High Intensity,Mid-Range,Nightlife|History|Culture
+166,22,Solo,Vegetarian,High Intensity,Luxury,Mountains|Temples
+167,35,Couple,Vegan,High Intensity,Budget,Beaches|Shopping|Food|Relaxation
+168,42,Family,Vegan,High Intensity,Mid-Range,Relaxation|Temples|Photography|Beaches
+169,35,Solo,Any,Relaxed,Budget,Food|Adventure|Nature|Nightlife
+170,35,Family,Non-Vegetarian,Moderate,Luxury,Relaxation|History
+171,62,Solo,Vegetarian,Relaxed,Mid-Range,Museums|Nightlife|Photography|History
+172,30,Family,Any,Relaxed,Budget,Beaches|Nature|Spiritual
+173,20,Solo,Any,Moderate,Budget,Food|Adventure|Temples|Relaxation
+174,35,Family,Vegetarian,Relaxed,Budget,Culture|Relaxation|Shopping|Spiritual
+175,24,Solo,Any,Moderate,Luxury,Mountains|History|Wildlife|Nightlife
+176,55,Friends,Vegetarian,Moderate,Mid-Range,Adventure|Relaxation|Food
+177,22,Family,Vegan,Relaxed,Budget,Nightlife|Shopping|Wildlife|Food
+178,42,Solo,Non-Vegetarian,Relaxed,Mid-Range,Adventure|History
+179,30,Family,Any,Relaxed,Budget,Beaches|Wildlife
+180,42,Couple,Vegetarian,Moderate,Luxury,Food|Spiritual|Nightlife|Culture
+181,20,Friends,Vegan,High Intensity,Mid-Range,Wildlife|Mountains
+182,42,Friends,Vegan,Relaxed,Luxury,Mountains|Temples|Beaches
+183,55,Family,Vegetarian,Relaxed,Mid-Range,Temples|Spiritual
+184,42,Solo,Vegan,Relaxed,Mid-Range,Spiritual|History|Photography
+185,24,Solo,Non-Vegetarian,Moderate,Mid-Range,Nightlife|Mountains|Food|Relaxation
+186,24,Couple,Non-Vegetarian,Relaxed,Luxury,Nature|History
+187,24,Solo,Any,Moderate,Luxury,Relaxation|Nightlife
+188,55,Family,Any,Moderate,Luxury,Culture|Nature|Wildlife|Mountains
+189,30,Family,Vegan,Moderate,Mid-Range,Beaches|Culture|Food|Mountains
+190,20,Solo,Vegetarian,High Intensity,Luxury,Spiritual|History|Mountains
+191,62,Friends,Vegetarian,Moderate,Luxury,Shopping|Food|Relaxation
+192,27,Family,Any,Relaxed,Mid-Range,Wildlife|Food|Nature|Beaches
+193,22,Couple,Any,Moderate,Luxury,Adventure|Photography
+194,62,Couple,Any,Moderate,Luxury,Culture|History|Temples
+195,20,Family,Any,Moderate,Mid-Range,Culture|Mountains
+196,24,Family,Non-Vegetarian,Moderate,Mid-Range,Shopping|Nightlife
+197,42,Couple,Any,High Intensity,Mid-Range,Photography|Mountains|History|Food
+198,24,Solo,Vegetarian,Moderate,Mid-Range,Nightlife|Temples|Food|Culture
+199,24,Couple,Non-Vegetarian,Relaxed,Budget,Relaxation|Wildlife|Adventure
+200,22,Family,Vegetarian,High Intensity,Mid-Range,Food|Relaxation
+201,24,Friends,Non-Vegetarian,High Intensity,Mid-Range,Nature|Museums
+202,20,Friends,Any,High Intensity,Mid-Range,Nightlife|Photography|Adventure
+203,55,Couple,Non-Vegetarian,Moderate,Luxury,Adventure|History|Relaxation|Wildlife
+204,55,Friends,Any,Relaxed,Budget,Relaxation|Temples|Food
+205,24,Family,Vegan,High Intensity,Budget,Nightlife|Wildlife
+206,62,Solo,Vegan,Moderate,Luxury,Mountains|Relaxation|Nature
+207,24,Friends,Any,Moderate,Budget,Museums|Adventure
+208,42,Solo,Any,Relaxed,Mid-Range,Food|Culture|Adventure
+209,27,Solo,Vegan,Relaxed,Budget,Museums|Mountains|Photography
+210,20,Family,Any,Moderate,Luxury,Photography|Spiritual|Nature
+211,20,Solo,Non-Vegetarian,High Intensity,Luxury,History|Adventure
+212,62,Friends,Non-Vegetarian,Moderate,Budget,Relaxation|History
+213,20,Couple,Any,Relaxed,Budget,Nightlife|Relaxation|Shopping
+214,55,Solo,Non-Vegetarian,Moderate,Mid-Range,Food|Shopping|Adventure|Photography
+215,20,Family,Non-Vegetarian,High Intensity,Luxury,Shopping|Temples
+216,22,Family,Vegetarian,Moderate,Mid-Range,Food|Museums
+217,20,Friends,Vegan,Relaxed,Mid-Range,History|Photography|Beaches
+218,27,Solo,Vegetarian,Moderate,Luxury,Photography|Relaxation|Culture|Nature
+219,35,Couple,Non-Vegetarian,Relaxed,Budget,Wildlife|Photography|Museums|Nightlife
+220,55,Solo,Non-Vegetarian,Relaxed,Mid-Range,Adventure|Beaches|Relaxation
+221,30,Friends,Non-Vegetarian,Moderate,Mid-Range,Wildlife|History|Beaches|Nightlife
+222,20,Family,Any,Moderate,Luxury,Mountains|Relaxation|Culture
+223,55,Friends,Any,Moderate,Luxury,Nature|Wildlife|Photography
+224,30,Solo,Non-Vegetarian,High Intensity,Mid-Range,Temples|Mountains|Museums|Shopping
+225,35,Solo,Vegan,Moderate,Mid-Range,Culture|Nightlife
+226,42,Couple,Vegan,High Intensity,Mid-Range,Wildlife|Culture|Museums|Beaches
+227,30,Solo,Any,Moderate,Luxury,Nightlife|Museums
+228,24,Solo,Any,Relaxed,Budget,Spiritual|Shopping
+229,22,Couple,Vegetarian,High Intensity,Budget,Culture|Museums|Temples|Shopping
+230,55,Family,Non-Vegetarian,High Intensity,Mid-Range,Wildlife|Relaxation|Mountains
+231,42,Family,Non-Vegetarian,Moderate,Luxury,History|Adventure|Mountains|Beaches
+232,42,Solo,Any,Relaxed,Luxury,Relaxation|History|Photography
+233,30,Friends,Vegetarian,Moderate,Budget,Mountains|Nature
+234,55,Solo,Vegetarian,High Intensity,Luxury,Spiritual|Culture|Nightlife|Museums
+235,30,Family,Non-Vegetarian,Moderate,Luxury,Photography|Museums
+236,27,Solo,Non-Vegetarian,Moderate,Budget,Relaxation|Nature
+237,35,Family,Vegetarian,Relaxed,Mid-Range,Relaxation|Food|Nature
+238,42,Friends,Vegetarian,Relaxed,Mid-Range,Temples|Relaxation|Museums|Shopping
+239,22,Friends,Non-Vegetarian,High Intensity,Luxury,Nightlife|Food|Culture
+240,24,Couple,Vegetarian,High Intensity,Budget,Food|Spiritual|Beaches
+241,30,Couple,Non-Vegetarian,Moderate,Luxury,Culture|Photography
+242,30,Solo,Vegan,Relaxed,Luxury,Adventure|Nightlife|Food
+243,30,Solo,Non-Vegetarian,Relaxed,Luxury,Nightlife|Nature|Shopping|Relaxation
+244,35,Solo,Vegan,High Intensity,Budget,Mountains|Beaches
+245,42,Solo,Vegan,High Intensity,Mid-Range,Museums|Nightlife|Food
+246,55,Couple,Vegetarian,Relaxed,Mid-Range,Temples|History|Wildlife|Mountains
+247,42,Friends,Non-Vegetarian,Moderate,Luxury,Adventure|Culture|Shopping
+248,35,Family,Vegetarian,Moderate,Budget,Nature|Relaxation|Culture
+249,55,Solo,Vegetarian,Relaxed,Mid-Range,Wildlife|Adventure|Nature
+250,42,Friends,Vegan,High Intensity,Luxury,Spiritual|Nature
+251,35,Couple,Any,Moderate,Mid-Range,Wildlife|Food
+252,55,Solo,Any,Relaxed,Budget,Temples|Food
+253,35,Solo,Any,Moderate,Luxury,History|Wildlife
+254,20,Solo,Vegan,Moderate,Mid-Range,Nature|History|Photography
+255,20,Friends,Non-Vegetarian,Moderate,Luxury,Shopping|Food
+256,30,Solo,Vegan,High Intensity,Luxury,Food|Wildlife|Relaxation
+257,22,Couple,Vegan,High Intensity,Mid-Range,Temples|Culture
+258,24,Couple,Vegetarian,Relaxed,Budget,Food|Temples|Museums|Beaches
+259,35,Friends,Non-Vegetarian,Moderate,Luxury,Wildlife|Nature|Shopping|Food
+260,35,Couple,Vegan,High Intensity,Luxury,Shopping|Photography|History
+261,62,Friends,Vegan,Moderate,Luxury,Shopping|History|Wildlife|Beaches
+262,22,Friends,Vegetarian,High Intensity,Mid-Range,History|Relaxation|Photography|Spiritual
+263,30,Couple,Any,Relaxed,Luxury,Beaches|Shopping|Wildlife|Nature
+264,27,Solo,Any,Moderate,Mid-Range,Photography|Mountains|Adventure|Beaches
+265,24,Friends,Any,High Intensity,Luxury,Adventure|Temples|Food|Shopping
+266,20,Couple,Any,High Intensity,Mid-Range,Adventure|Food|Culture|Nightlife
+267,35,Couple,Vegan,High Intensity,Luxury,Museums|Food|Culture
+268,30,Friends,Vegan,Relaxed,Mid-Range,Adventure|History
+269,30,Couple,Vegan,High Intensity,Luxury,Photography|Wildlife|Culture|Spiritual
+270,30,Family,Any,Moderate,Mid-Range,Shopping|Nightlife
+271,24,Family,Vegetarian,Moderate,Mid-Range,History|Photography
+272,30,Friends,Vegan,High Intensity,Luxury,Adventure|Spiritual
+273,30,Couple,Non-Vegetarian,Relaxed,Budget,Shopping|Photography
+274,62,Couple,Vegan,High Intensity,Mid-Range,Adventure|Beaches|Mountains|Temples
+275,22,Couple,Any,High Intensity,Mid-Range,Food|Nature
+276,55,Couple,Vegetarian,Relaxed,Luxury,Culture|History|Nightlife
+277,27,Solo,Non-Vegetarian,Relaxed,Mid-Range,Temples|Spiritual
+278,55,Couple,Vegan,High Intensity,Luxury,Spiritual|History|Beaches|Relaxation
+279,22,Family,Any,Relaxed,Luxury,Wildlife|Nightlife|Food
+280,55,Family,Vegan,Relaxed,Luxury,Relaxation|Mountains
+281,55,Family,Vegan,High Intensity,Luxury,Nature|Beaches|Photography|Culture
+282,27,Couple,Vegan,Relaxed,Mid-Range,Spiritual|Nightlife|Temples|Relaxation
+283,22,Couple,Non-Vegetarian,Relaxed,Mid-Range,Wildlife|Culture
+284,42,Couple,Vegan,High Intensity,Luxury,Relaxation|History|Culture
+285,20,Family,Vegetarian,Moderate,Mid-Range,Culture|Photography|Adventure|Beaches
+286,24,Friends,Vegetarian,High Intensity,Mid-Range,Food|Photography|Relaxation|History
+287,35,Couple,Non-Vegetarian,Moderate,Luxury,Nature|Wildlife
+288,35,Friends,Non-Vegetarian,Relaxed,Luxury,Food|Wildlife|Relaxation|Museums
+289,22,Friends,Vegetarian,Relaxed,Luxury,Photography|Culture|Mountains|Shopping
+290,62,Couple,Any,Relaxed,Luxury,Food|Nature|Spiritual|Culture
+291,27,Friends,Any,Relaxed,Mid-Range,Museums|Food
+292,24,Friends,Any,High Intensity,Mid-Range,Shopping|Beaches|Food
+293,20,Friends,Non-Vegetarian,High Intensity,Budget,Spiritual|Beaches|Photography
+294,20,Friends,Vegetarian,Relaxed,Mid-Range,Photography|Mountains|Food
+295,20,Family,Any,Moderate,Mid-Range,Nature|Relaxation|Museums
+296,55,Friends,Non-Vegetarian,High Intensity,Mid-Range,Mountains|Nightlife|Spiritual
+297,22,Couple,Non-Vegetarian,Relaxed,Budget,Temples|Food|Nature|Photography
+298,30,Friends,Any,Relaxed,Budget,Photography|Food|Temples|Spiritual
+299,55,Family,Vegetarian,Relaxed,Luxury,History|Adventure
+300,42,Solo,Vegetarian,High Intensity,Budget,Adventure|Mountains
+301,55,Solo,Any,Moderate,Budget,Photography|Beaches
+302,62,Couple,Vegan,Relaxed,Luxury,Nature|Food
+303,35,Family,Non-Vegetarian,Moderate,Mid-Range,History|Nature
+304,30,Solo,Any,High Intensity,Mid-Range,Shopping|Photography|Nature|Nightlife
+305,20,Family,Vegan,High Intensity,Mid-Range,Nightlife|Temples|Relaxation|Food
+306,42,Couple,Any,Relaxed,Budget,Temples|Nature|Relaxation
+307,30,Couple,Any,Moderate,Luxury,Museums|Beaches|Food
+308,62,Couple,Vegan,High Intensity,Budget,Adventure|History|Museums
+309,55,Family,Non-Vegetarian,Relaxed,Mid-Range,Food|Photography
+310,42,Solo,Non-Vegetarian,Moderate,Budget,Adventure|Relaxation
+311,35,Family,Vegetarian,High Intensity,Mid-Range,Adventure|Museums
+312,27,Couple,Vegan,Moderate,Mid-Range,Museums|Adventure|Food
+313,55,Family,Any,Moderate,Budget,History|Culture|Food
+314,55,Family,Any,Relaxed,Luxury,Culture|Museums
+315,27,Couple,Any,Moderate,Budget,History|Food
+316,27,Family,Non-Vegetarian,Moderate,Luxury,Temples|Shopping
+317,35,Family,Any,Moderate,Budget,Photography|Nightlife|Museums
+318,35,Couple,Any,Relaxed,Luxury,Photography|Food
+319,20,Solo,Vegetarian,Relaxed,Mid-Range,Spiritual|Nightlife
+320,24,Couple,Vegetarian,Relaxed,Luxury,Photography|Nature
+321,55,Family,Any,High Intensity,Mid-Range,Shopping|Nightlife
+322,20,Solo,Vegan,High Intensity,Mid-Range,Food|Temples|Beaches|Relaxation
+323,20,Friends,Non-Vegetarian,Relaxed,Budget,Mountains|Museums
+324,62,Family,Vegetarian,Moderate,Mid-Range,History|Relaxation|Temples
+325,55,Couple,Vegetarian,Relaxed,Mid-Range,Adventure|History|Nightlife|Mountains
+326,42,Friends,Non-Vegetarian,Relaxed,Mid-Range,Wildlife|Beaches|Nightlife|Spiritual
+327,42,Family,Non-Vegetarian,Relaxed,Luxury,Spiritual|Mountains|Food|Beaches
+328,55,Family,Vegan,High Intensity,Luxury,Museums|Mountains
+329,20,Couple,Non-Vegetarian,High Intensity,Mid-Range,Beaches|Adventure|Shopping
+330,22,Family,Any,High Intensity,Luxury,Shopping|Adventure
+331,35,Friends,Vegetarian,High Intensity,Luxury,Nature|Relaxation|Photography|Spiritual
+332,35,Solo,Vegetarian,Moderate,Luxury,Temples|Adventure
+333,42,Family,Any,Moderate,Budget,Nightlife|History
+334,35,Friends,Any,Relaxed,Luxury,Nature|Nightlife|Shopping
+335,30,Couple,Any,High Intensity,Luxury,Mountains|Museums|History|Nature
+336,24,Friends,Vegetarian,Moderate,Mid-Range,Culture|Mountains|Spiritual
+337,35,Family,Non-Vegetarian,Moderate,Mid-Range,Nature|Mountains
+338,62,Friends,Vegan,High Intensity,Budget,Beaches|Mountains
+339,35,Friends,Any,Relaxed,Luxury,History|Temples
+340,62,Couple,Non-Vegetarian,Relaxed,Mid-Range,Food|Nature|Nightlife|Temples
+341,30,Family,Any,Moderate,Mid-Range,Nature|Mountains|Museums
+342,30,Friends,Non-Vegetarian,High Intensity,Luxury,Culture|History
+343,55,Couple,Vegetarian,Moderate,Mid-Range,Mountains|Nature|History
+344,42,Family,Non-Vegetarian,Moderate,Mid-Range,Culture|Temples|Nightlife
+345,27,Friends,Vegan,High Intensity,Luxury,Nature|Temples|Culture
+346,55,Couple,Any,Moderate,Budget,Temples|History|Relaxation
+347,27,Couple,Any,High Intensity,Budget,Relaxation|Food|Beaches|Photography
+348,55,Family,Any,Relaxed,Luxury,Mountains|Spiritual|Relaxation|Temples
+349,30,Couple,Any,Moderate,Budget,Nightlife|Nature|Photography
+350,55,Friends,Any,High Intensity,Budget,Temples|Food|Spiritual|Photography

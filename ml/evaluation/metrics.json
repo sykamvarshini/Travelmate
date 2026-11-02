@@ -1,0 +1,27 @@
+{
+  "model_version": "1.0.0",
+  "training_timestamp": "2026-09-24T21:24:01.155383",
+  "total_attractions": 60,
+  "total_user_interactions": 3494,
+  "feature_dimensions": 754,
+  "algorithms": {
+    "content_based": {
+      "algorithm": "Cosine Similarity over TF-IDF + Scaled Multi-Feature Matrix",
+      "text_weight": 0.75,
+      "numerical_features_weight": 0.25,
+      "cold_start_support": true
+    },
+    "collaborative_filtering": {
+      "algorithm": "TruncatedSVD Matrix Factorization",
+      "latent_factors": 6,
+      "rmse": 3.395,
+      "mae": 3.3377,
+      "within_1_star_accuracy": 0.0,
+      "test_samples": 699
+    },
+    "hybrid": {
+      "combination": "Linear weighted score (65% Content + 35% SVD)",
+      "fallback": "Pure Content-Based for unseen users"
+    }
+  }
+}
