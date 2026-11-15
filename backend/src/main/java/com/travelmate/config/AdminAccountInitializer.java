@@ -14,6 +14,10 @@ import org.springframework.util.StringUtils;
 import java.util.Optional;
 import java.util.logging.Logger;
 
+/**
+ * Initializes default administrator accounts from environment variables.
+ * No sensitive credentials or passwords are hardcoded in the codebase.
+ */
 @Component
 @Order(1) // Run before general data initialization
 public class AdminAccountInitializer implements CommandLineRunner {
@@ -23,22 +27,22 @@ public class AdminAccountInitializer implements CommandLineRunner {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    @Value("${app.admin.admin1.email:sykamvarshini30@gmail.com}")
+    @Value("${app.admin.admin1.email:${ADMIN1_EMAIL:}}")
     private String admin1Email;
 
-    @Value("${app.admin.admin1.password:${ADMIN1_PASSWORD:Admin@TravelMate2026}}")
+    @Value("${app.admin.admin1.password:${ADMIN1_PASSWORD:}}")
     private String admin1Password;
 
-    @Value("${app.admin.admin1.name:${ADMIN1_NAME:Varshini Sykam}}")
+    @Value("${app.admin.admin1.name:${ADMIN1_NAME:Administrator 1}}")
     private String admin1Name;
 
-    @Value("${app.admin.admin2.email:sindhura11@gmail.com}")
+    @Value("${app.admin.admin2.email:${ADMIN2_EMAIL:}}")
     private String admin2Email;
 
-    @Value("${app.admin.admin2.password:${ADMIN2_PASSWORD:Admin@TravelMate2026}}")
+    @Value("${app.admin.admin2.password:${ADMIN2_PASSWORD:}}")
     private String admin2Password;
 
-    @Value("${app.admin.admin2.name:${ADMIN2_NAME:Sindhura}}")
+    @Value("${app.admin.admin2.name:${ADMIN2_NAME:Administrator 2}}")
     private String admin2Name;
 
     public AdminAccountInitializer(UserRepository userRepository, PasswordEncoder passwordEncoder) {
@@ -49,9 +53,18 @@ public class AdminAccountInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        logger.info("Verifying authorized administrator accounts...");
-        initAdminAccount(admin1Email, admin1Name, admin1Password);
-        initAdminAccount(admin2Email, admin2Name, admin2Password);
+        logger.info("Verifying authorized administrator accounts from environment configuration...");
+        if (StringUtils.hasText(admin1Email)) {
+            initAdminAccount(admin1Email, admin1Name, admin1Password);
+        } else {
+            logger.info("ADMIN1_EMAIL is not set in environment; skipping Admin 1 seeding.");
+        }
+
+        if (StringUtils.hasText(admin2Email)) {
+            initAdminAccount(admin2Email, admin2Name, admin2Password);
+        } else {
+            logger.info("ADMIN2_EMAIL is not set in environment; skipping Admin 2 seeding.");
+        }
         logger.info("Administrator accounts verification completed.");
     }
 
@@ -84,13 +97,18 @@ public class AdminAccountInitializer implements CommandLineRunner {
                 userRepository.save(existingUser);
             }
         } else {
+            if (!StringUtils.hasText(rawPassword)) {
+                logger.warning("Admin account for " + normalizedEmail + " requested, but no password was provided in environment variables. Account creation skipped for security.");
+                return;
+            }
+
             // Create new admin account
             User newAdmin = new User();
             newAdmin.setEmail(normalizedEmail);
             newAdmin.setFullName(StringUtils.hasText(fullName) ? fullName.trim() : "Administrator");
             newAdmin.setRole(Role.ROLE_ADMIN);
             newAdmin.setAge(25);
-            newAdmin.setPassword(passwordEncoder.encode(StringUtils.hasText(rawPassword) ? rawPassword : "Admin@TravelMate2026"));
+            newAdmin.setPassword(passwordEncoder.encode(rawPassword));
 
             userRepository.save(newAdmin);
             logger.info("Created authorized administrator account: " + normalizedEmail);

@@ -1,22 +1,24 @@
 server:
-  port: 8080
+  port: ${PORT:8080}
 
 spring:
   application:
     name: travelmate-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
   datasource:
-    url: jdbc:mysql://localhost:3306/travelmate_ai?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
-    username: root
-    password: Ammulu@3004
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:travelmate_ai}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata}
+    username: ${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:root}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD}}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: false
+      ddl-auto: ${HIBERNATE_DDL_AUTO:update}
+    show-sql: ${SHOW_SQL:false}
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
-        format_sql: true
+        format_sql: false
   jackson:
     serialization:
       fail-on-empty-beans: false
@@ -24,16 +26,18 @@ spring:
 app:
   admin:
     admin1:
-      email: ${ADMIN1_EMAIL:sykamvarshini30@gmail.com}
-      password: ${ADMIN1_PASSWORD:Admin@TravelMate2026}
-      name: ${ADMIN1_NAME:Varshini Sykam}
+      email: ${ADMIN1_EMAIL:}
+      password: ${ADMIN1_PASSWORD:}
+      name: ${ADMIN1_NAME:Administrator 1}
     admin2:
-      email: ${ADMIN2_EMAIL:sindhura11@gmail.com}
-      password: ${ADMIN2_PASSWORD:Admin@TravelMate2026}
-      name: ${ADMIN2_NAME:Sindhura}
+      email: ${ADMIN2_EMAIL:}
+      password: ${ADMIN2_PASSWORD:}
+      name: ${ADMIN2_NAME:Administrator 2}
   jwt:
-    secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
-    expiration-ms: 86400000
+    secret: ${JWT_SECRET}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
   ml-service:
     base-url: ${ML_SERVICE_URL:http://localhost:8000}
   external-apis:

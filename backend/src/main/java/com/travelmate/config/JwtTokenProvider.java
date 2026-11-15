@@ -6,6 +6,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
@@ -18,9 +19,16 @@ public class JwtTokenProvider {
     private final long validityInMilliseconds;
 
     public JwtTokenProvider(
-            @Value("${app.jwt.secret}") String secret,
+            @Value("${app.jwt.secret:}") String secret,
             @Value("${app.jwt.expiration-ms:86400000}") long validityInMilliseconds) {
-        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        if (!StringUtils.hasText(secret)) {
+            throw new IllegalStateException("CRITICAL SECURITY CONFIGURATION ERROR: Required environment variable 'JWT_SECRET' is not set. The application fails safely and cannot start without a secure JWT secret.");
+        }
+        byte[] secretBytes = secret.trim().getBytes(StandardCharsets.UTF_8);
+        if (secretBytes.length < 32) {
+            throw new IllegalStateException("CRITICAL SECURITY CONFIGURATION ERROR: 'JWT_SECRET' must be at least 32 characters (256 bits) long for HMAC-SHA256 signing.");
+        }
+        this.key = Keys.hmacShaKeyFor(secretBytes);
         this.validityInMilliseconds = validityInMilliseconds;
     }
 
