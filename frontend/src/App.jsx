@@ -8,6 +8,8 @@ import Dashboard from './pages/Dashboard';
 import Auth from './pages/Auth';
 import Itinerary from './pages/Itinerary';
 import Explore from './pages/Explore';
+import AdminDashboard from './pages/AdminDashboard';
+import AdminRoute from './components/AdminRoute';
 
 function App() {
   return (
@@ -20,6 +22,7 @@ function App() {
           <Route path="/auth" element={<Auth />} />
           <Route path="/plan" element={<PlanTrip />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
           <Route path="/trip/:id" element={<Itinerary />} />
         </Routes>
       </div>

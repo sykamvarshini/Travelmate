@@ -1,10 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Mail, Lock, User, ArrowRight, Shield } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { authService } from '../services/api';
 import './Auth.css';
 
 const Auth = () => {
+  const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
   const [isLogin, setIsLogin] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [formData, setFormData] = useState({
@@ -16,10 +21,26 @@ const Auth = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+
+  useEffect(() => {
+    const mode = searchParams.get('mode');
+    if (mode === 'admin') {
+      setIsLogin(true);
+      setIsAdmin(true);
+    }
+  }, [searchParams]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleTabChange = (loginMode) => {
+    setIsLogin(loginMode);
+    setError('');
+    // If switching to registration, force admin mode off because users cannot register as admin
+    if (!loginMode) {
+      setIsAdmin(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -30,61 +51,58 @@ const Auth = () => {
     try {
       let response;
       if (isLogin) {
-        // We'll pass the intended role (USER or ADMIN) to the login endpoint if our backend supports role-based login validation.
-        // Or the backend will return the role in the JWT token/response.
-        response = await authService.login({ email: formData.email, password: formData.password });
+        if (isAdmin) {
+          // Dedicated Admin Login Endpoint - strictly verifies ROLE_ADMIN on backend
+          response = await authService.adminLogin({
+            email: formData.email,
+            password: formData.password
+          });
+        } else {
+          // Normal User Login Endpoint
+          response = await authService.login({
+            email: formData.email,
+            password: formData.password
+          });
+        }
       } else {
+        // Normal User Self-Registration - backend guarantees ROLE_USER
         response = await authService.register({
           email: formData.email,
           password: formData.password,
           fullName: formData.fullName,
-          age: parseInt(formData.age),
-          role: isAdmin ? 'ADMIN' : 'USER'
+          age: parseInt(formData.age, 10)
         });
       }
 
       const { token, role, fullName } = response;
       const userEmail = response.email || formData.email;
-      
-      // Basic role verification on client-side
-      if (isLogin && isAdmin && role !== 'ADMIN') {
-        setError('Unauthorized: You are not an admin.');
-        setLoading(false);
-        return;
-      }
-      if (isLogin && !isAdmin && role === 'ADMIN') {
-        // Technically an admin could log in as a user, but we'll enforce the UI toggle
-        setError('Please use the Admin Sign In portal.');
-        setLoading(false);
-        return;
-      }
 
-      // If "remember me" is selected, we store in localStorage and clear sessionStorage, else vice versa
-      if (rememberMe) {
-        localStorage.setItem('token', token);
-        localStorage.setItem('role', role);
-        if (fullName) localStorage.setItem('fullName', fullName);
-        if (userEmail) localStorage.setItem('userEmail', userEmail);
-        sessionStorage.removeItem('token');
-        sessionStorage.removeItem('role');
-        sessionStorage.removeItem('fullName');
-        sessionStorage.removeItem('userEmail');
-      } else {
-        sessionStorage.setItem('token', token);
-        sessionStorage.setItem('role', role);
-        if (fullName) sessionStorage.setItem('fullName', fullName);
-        if (userEmail) sessionStorage.setItem('userEmail', userEmail);
-        localStorage.removeItem('token');
-        localStorage.removeItem('role');
-        localStorage.removeItem('fullName');
-        localStorage.removeItem('userEmail');
-      }
-      
+      // Store auth session
+      const storage = rememberMe ? localStorage : sessionStorage;
+      const nonStorage = rememberMe ? sessionStorage : localStorage;
+
+      storage.setItem('token', token);
+      storage.setItem('role', role);
+      if (fullName) storage.setItem('fullName', fullName);
+      if (userEmail) storage.setItem('userEmail', userEmail);
+
+      nonStorage.removeItem('token');
+      nonStorage.removeItem('role');
+      nonStorage.removeItem('fullName');
+      nonStorage.removeItem('userEmail');
+
       window.dispatchEvent(new Event('authChange'));
-      navigate('/dashboard');
+
+      // Redirect administrator to Admin Dashboard, regular users to Dashboard
+      if (role === 'ROLE_ADMIN' || role === 'ADMIN') {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
 
     } catch (err) {
-      setError(err.response?.data?.message || 'Authentication failed. Please try again.');
+      const errMsg = err.response?.data?.message || err.response?.data?.error || 'Authentication failed. Please try again.';
+      setError(errMsg);
     } finally {
       setLoading(false);
     }
@@ -94,42 +112,53 @@ const Auth = () => {
     <div className="auth-container animate-fade-in">
       <div className="auth-card">
         <div className="auth-header">
-          <h1>{isLogin ? 'Welcome Back' : 'Create Account'}</h1>
-          <p>{isLogin ? 'Sign in to access your travel plans' : 'Join TravelMate AI today'}</p>
+          <h1>{isLogin ? (isAdmin ? 'Admin Portal' : t('auth.welcomeBack')) : t('auth.createAccount')}</h1>
+          <p>{isLogin ? (isAdmin ? 'Authorized administrators sign-in' : t('auth.signInSub')) : t('auth.registerSub')}</p>
         </div>
 
         <div className="auth-tabs">
           <button 
+            type="button"
             className={`auth-tab ${isLogin ? 'active' : ''}`}
-            onClick={() => setIsLogin(true)}
+            onClick={() => handleTabChange(true)}
           >
-            Sign In
+            {t('auth.signInBtn')}
           </button>
           <button 
+            type="button"
             className={`auth-tab ${!isLogin ? 'active' : ''}`}
-            onClick={() => setIsLogin(false)}
+            onClick={() => handleTabChange(false)}
           >
-            Register
+            {t('auth.registerBtn')}
           </button>
         </div>
 
-        {/* Role Toggle */}
-        <div className="role-toggle">
-          <button 
-            className={`role-btn ${!isAdmin ? 'active' : ''}`}
-            onClick={() => setIsAdmin(false)}
-            type="button"
-          >
-            <User size={14} style={{display: 'inline', marginRight: '4px'}}/> User
-          </button>
-          <button 
-            className={`role-btn ${isAdmin ? 'active' : ''}`}
-            onClick={() => setIsAdmin(true)}
-            type="button"
-          >
-            <Shield size={14} style={{display: 'inline', marginRight: '4px'}}/> Admin
-          </button>
-        </div>
+        {/* Role Toggle is available ONLY on the Sign-In tab */}
+        {isLogin && (
+          <div className="role-toggle">
+            <button 
+              className={`role-btn ${!isAdmin ? 'active' : ''}`}
+              onClick={() => { setIsAdmin(false); setError(''); }}
+              type="button"
+            >
+              <User size={14} style={{ display: 'inline', marginRight: '4px' }} /> User Login
+            </button>
+            <button 
+              className={`role-btn ${isAdmin ? 'active' : ''}`}
+              onClick={() => { setIsAdmin(true); setError(''); }}
+              type="button"
+            >
+              <Shield size={14} style={{ display: 'inline', marginRight: '4px' }} /> Admin Portal
+            </button>
+          </div>
+        )}
+
+        {isLogin && isAdmin && (
+          <div className="admin-portal-banner">
+            <Shield size={16} />
+            <span>Secure Administrator Authentication</span>
+          </div>
+        )}
 
         {error && <div className="error-message">{error}</div>}
 
@@ -137,13 +166,13 @@ const Auth = () => {
           {!isLogin && (
             <>
               <div className="form-group">
-                <label>Full Name</label>
+                <label>{t('auth.fullNameLabel')}</label>
                 <div className="input-wrapper">
                   <User size={18} className="input-icon" />
                   <input 
                     type="text" 
                     name="fullName" 
-                    placeholder="John Doe"
+                    placeholder={t('auth.fullNamePlaceholder')}
                     value={formData.fullName} 
                     onChange={handleChange} 
                     required 
@@ -151,13 +180,13 @@ const Auth = () => {
                 </div>
               </div>
               <div className="form-group">
-                <label>Age</label>
+                <label>{t('auth.ageLabel')}</label>
                 <div className="input-wrapper">
                   <User size={18} className="input-icon" />
                   <input 
                     type="number" 
                     name="age" 
-                    placeholder="25"
+                    placeholder={t('auth.agePlaceholder')}
                     value={formData.age} 
                     onChange={handleChange} 
                     required 
@@ -168,13 +197,13 @@ const Auth = () => {
           )}
 
           <div className="form-group">
-            <label>Email Address</label>
+            <label>{t('auth.emailLabel')}</label>
             <div className="input-wrapper">
               <Mail size={18} className="input-icon" />
               <input 
                 type="email" 
                 name="email" 
-                placeholder="you@example.com"
+                placeholder={t('auth.emailPlaceholder')}
                 value={formData.email} 
                 onChange={handleChange} 
                 required 
@@ -183,13 +212,13 @@ const Auth = () => {
           </div>
 
           <div className="form-group">
-            <label>Password</label>
+            <label>{t('auth.passwordLabel')}</label>
             <div className="input-wrapper">
               <Lock size={18} className="input-icon" />
               <input 
                 type="password" 
                 name="password" 
-                placeholder="••••••••"
+                placeholder={t('auth.passwordPlaceholder')}
                 value={formData.password} 
                 onChange={handleChange} 
                 required 
@@ -205,14 +234,13 @@ const Auth = () => {
                   checked={rememberMe} 
                   onChange={(e) => setRememberMe(e.target.checked)}
                 />
-                Remember me
+                {t('auth.rememberMe')}
               </label>
-              <a href="#" className="forgot-password">Forgot Password?</a>
             </div>
           )}
 
           <button type="submit" className="primary-btn submit-btn" disabled={loading}>
-            {loading ? 'Processing...' : (isLogin ? (isAdmin ? 'Admin Sign In' : 'Sign In') : 'Create Account')}
+            {loading ? t('common.loading') : (isLogin ? (isAdmin ? 'Admin Sign In' : t('auth.signInBtn')) : t('auth.registerBtn'))}
             {!loading && <ArrowRight size={18} />}
           </button>
         </form>

@@ -1,18 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useDestinationTranslation } from '../utils/destinationTranslations';
 import { 
   Calendar, MapPin, Clock, DollarSign, CloudRain, Sun, AlertTriangle, 
-  ArrowLeft, RefreshCw, Sparkles, Send, ShieldCheck, CheckCircle2, 
-  Car, Utensils, Info, Compass, ChevronDown, ChevronUp, Bot, CornerDownRight, 
-  Navigation, Train, Bus, Layers, Check, Trash2, Users, AlertCircle,
-  UserPlus, Share2, Edit3, X
+  ArrowLeft, RefreshCw, Sparkles, CheckCircle2, 
+  Car, Compass, 
+  Navigation, Train, Bus, Check, Trash2, Users, AlertCircle,
+  UserPlus, Share2, Edit3, Plus, ChevronUp, ChevronDown, Search
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { tripService } from '../services/api';
+import { tripService, placesService } from '../services/api';
 import { weatherService, mapService } from '../services/externalApis';
 import { validateSegmentTransport, calculateHaversineKm } from '../services/transportValidation';
+import SafeImage from '../components/common/SafeImage';
+import LocationAutocomplete from '../components/LocationAutocomplete';
 import './Itinerary.css';
 
 // Fix Leaflet Default Marker Icon issue
@@ -65,7 +69,7 @@ const MapController = ({ allCoords, centerCoord, selectedCoord }) => {
       try {
         const bounds = L.latLngBounds(allCoords);
         map.fitBounds(bounds, { padding: [45, 45], maxZoom: 14 });
-      } catch (e) {
+      } catch (_e) {
         if (centerCoord) map.setView(centerCoord, 12);
       }
     } else if (centerCoord) {
@@ -81,6 +85,26 @@ const KNOWN_GEO = {
   gudivada: [16.4410, 80.9926],
   vijayawada: [16.5062, 80.6480],
   visakhapatnam: [17.6868, 83.2185],
+  "simhachalam temple": [17.7660, 83.2500],
+  simhachalam: [17.7660, 83.2500],
+  gitam: [17.7813, 83.3776],
+  "gitam university": [17.7813, 83.3776],
+  "gitam (deemed to be university)": [17.7813, 83.3776],
+  "gayatri university": [17.8205, 83.3421],
+  "gayatri vidya parishad": [17.8205, 83.3421],
+  gvp: [17.8205, 83.3421],
+  "andhra university": [17.7226, 83.3235],
+  "rushikonda beach": [17.7812, 83.3852],
+  rushikonda: [17.7812, 83.3852],
+  "ins kursura": [17.7180, 83.3330],
+  "submarine museum": [17.7180, 83.3330],
+  kailasagiri: [17.7490, 83.3420],
+  "rk beach": [17.7140, 83.3240],
+  "ramakrishna beach": [17.7140, 83.3240],
+  "yarada beach": [17.6530, 83.2700],
+  "dolphin's nose": [17.6740, 83.2920],
+  "tenneti park": [17.7570, 83.3550],
+  "indira gandhi zoological park": [17.7680, 83.3450],
   araku: [18.3333, 82.8833],
   "araku valley": [18.3333, 82.8833],
   tirupati: [13.6288, 79.4192],
@@ -108,6 +132,45 @@ const resolveKnownCoords = (query) => {
   return null;
 };
 
+// Automatic Intelligent Category Identifier
+const inferCategory = (title, address) => {
+  const t = ((title || '') + ' ' + (address || '')).toLowerCase();
+  if (t.includes('university') || t.includes('college') || t.includes('institute') || t.includes('gitam') || t.includes('gayatri') || t.includes('campus') || t.includes('vidya parishad') || t.includes('academy') || t.includes('polytechnic') || t.includes('iit') || t.includes('iim')) {
+    return 'Education / University';
+  }
+  if (t.includes('temple') || t.includes('mandir') || t.includes('spiritual') || t.includes('church') || t.includes('cathedral') || t.includes('basilica') || t.includes('mosque') || t.includes('masjid') || t.includes('dargah') || t.includes('gurdwara')) {
+    return 'Temples / Spiritual';
+  }
+  if (t.includes('beach') || t.includes('coast') || t.includes('sea') || t.includes('sagar') || t.includes('cove')) {
+    return 'Beaches';
+  }
+  if (t.includes('viewpoint') || t.includes('view point') || t.includes('point') || t.includes('overlook') || t.includes('dolphin')) {
+    return 'Viewpoints / Attractions';
+  }
+  if (t.includes('zoo') || t.includes('wildlife') || t.includes('sanctuary') || t.includes('safari') || t.includes('aquarium')) {
+    return 'Wildlife / Zoo';
+  }
+  if (t.includes('museum') || t.includes('memorial') || t.includes('submarine') || t.includes('aircraft') || t.includes('gallery')) {
+    return 'Museums';
+  }
+  if (t.includes('hill') || t.includes('waterfall') || t.includes('falls') || t.includes('caves') || t.includes('cave') || t.includes('valley') || t.includes('peak')) {
+    return 'Nature / Hill Stations';
+  }
+  if (t.includes('fort') || t.includes('palace') || t.includes('qila') || t.includes('monument') || t.includes('tomb') || t.includes('heritage')) {
+    return 'Historical / Heritage';
+  }
+  if (t.includes('park') || t.includes('garden') || t.includes('botanical')) {
+    return 'Parks & Gardens';
+  }
+  if (t.includes('restaurant') || t.includes('cafe') || t.includes('food') || t.includes('dining') || t.includes('bakery') || t.includes('wharf')) {
+    return 'Food & Dining';
+  }
+  if (t.includes('market') || t.includes('bazaar') || t.includes('mall') || t.includes('shopping')) {
+    return 'Shopping / Market';
+  }
+  return 'Sightseeing & Attractions';
+};
+
 // Safe Genuine Rating Formatter (Per Requirement 10 & 16)
 const formatRating = (val, count) => {
   if (!val || val === 'Information unavailable' || val === 'Rating unavailable') {
@@ -122,6 +185,8 @@ const formatRating = (val, count) => {
 };
 
 const Itinerary = () => {
+  const { t } = useTranslation();
+  const { getDestName, formatTripTitle } = useDestinationTranslation();
   const { id } = useParams();
   const [trip, setTrip] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -147,25 +212,52 @@ const Itinerary = () => {
   const mapContainerRef = useRef(null);
   const markerRefs = useRef({});
 
-  // Conversational Refinement State
-  const [chatMessages, setChatMessages] = useState([
-    { sender: 'ai', text: "Hello! I'm your TravelMate AI assistant. How would you like to refine this itinerary? You can ask to make it more relaxed, adjust the budget, add more food trails, or avoid early mornings." }
-  ]);
-  const [userInput, setUserInput] = useState('');
-  const [isRefining, setIsRefining] = useState(false);
-
   // Next Destination Verification & Suitability State
   const [nextDestinationCheck, setNextDestinationCheck] = useState(null);
   const [showNextConditionAlert, setShowNextConditionAlert] = useState(false);
   const [nextAlternatives, setNextAlternatives] = useState([]);
   const [loadingNextAlternatives, setLoadingNextAlternatives] = useState(false);
 
-  // Single-Activity Reschedule State
+  // Single-Activity Reschedule & Manual Place Adding State
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [rescheduleTarget, setRescheduleTarget] = useState(null);
   const [rescheduleReason, setRescheduleReason] = useState('Weather concern');
   const [rescheduleAlternatives, setRescheduleAlternatives] = useState([]);
   const [loadingRescheduleAlts, setLoadingRescheduleAlts] = useState(false);
+
+  // Manual Edit State (inside Reschedule modal)
+  const [activeModalTab, setActiveModalTab] = useState('recommendations'); // 'recommendations', 'search', 'manual'
+  const [manualForm, setManualForm] = useState({
+    placeName: '',
+    address: '',
+    latitude: null,
+    longitude: null,
+    dayId: null,
+    dayNumber: 1,
+    startTime: '11:00',
+    durationMinutes: 90,
+    category: 'Sightseeing & Attractions',
+    notes: ''
+  });
+  const [replaceManualForm, setReplaceManualForm] = useState({
+    placeName: '',
+    address: '',
+    latitude: null,
+    longitude: null,
+    startTime: '11:00',
+    durationMinutes: 90,
+    category: 'Sightseeing & Attractions',
+    notes: ''
+  });
+  const [editingTimingId, setEditingTimingId] = useState(null);
+  const [timingForm, setTimingForm] = useState({ startTime: '11:00', durationMinutes: 90 });
+  const [placeEditDrafts, setPlaceEditDrafts] = useState({});
+  const [isSavingPlaceId, setIsSavingPlaceId] = useState(null);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [destinationAttractions, setDestinationAttractions] = useState([]);
+  const [loadingDestAttractions, setLoadingDestAttractions] = useState(false);
+  const searchDebounceTimer = useRef(null);
 
   // Toast / notification feedback
   const [toastMessage, setToastMessage] = useState(null);
@@ -254,51 +346,64 @@ const Itinerary = () => {
       let globalSeq = 1;
 
       if (data.days && data.days.length > 0) {
-        data.days = data.days.map((day, dIdx) => ({
-          ...day,
-          weather: day.weatherCondition ? `${day.weatherCondition}, ${day.maxTempC || 30}°C` : "Sunny, 30°C",
-          theme: day.theme || `Day ${day.dayNumber} Exploration`,
-          activities: (day.items && day.items.length > 0) ? day.items.map((item, actIdx) => {
-            const durHrs = (item.durationMinutes || 120) / 60;
-            const seq = globalSeq++;
-            
-            // Coordinates
-            let coords = (item.latitude && item.longitude) 
-              ? [item.latitude, item.longitude] 
-              : resolveKnownCoords(item.title);
-            
-            if (!coords) {
-              coords = [destCoords[0] + (actIdx * 0.008), destCoords[1] + (actIdx * 0.008)];
-            }
+        const sortedDays = [...data.days].sort((a, b) => (a.dayNumber ?? 0) - (b.dayNumber ?? 0));
+        data.days = sortedDays.map((day, dIdx) => {
+          const sortedItems = [...(day.items || [])].sort((a, b) => {
+            const oA = a.itemOrder != null ? a.itemOrder : 0;
+            const oB = b.itemOrder != null ? b.itemOrder : 0;
+            if (oA !== oB) return oA - oB;
+            return (a.startTime || '').localeCompare(b.startTime || '');
+          });
 
-            return {
-              id: item.id || `act-${dIdx}-${actIdx}`,
-              seq,
-              time: item.startTime || (actIdx === 0 ? "09:00" : actIdx === 1 ? "12:00" : actIdx === 2 ? "15:00" : "18:00"),
-              type: item.category ? item.category.toLowerCase().replace(/[^a-z0-9]/g, '-') : "attraction",
-              category: item.category || "Sightseeing",
-              title: item.title,
-              location: item.indoorOutdoor || "Outdoor",
-              indoorOutdoor: item.indoorOutdoor || "Outdoor",
-              coordinates: coords,
-              description: item.recommendationReason || `Top-rated destination in ${data.destinationCity}`,
-              cost: item.costInr && item.costInr > 0 ? `₹${item.costInr}` : "Free Entry",
-              costNumeric: item.costInr || 0,
-              duration: item.durationMinutes ? `${Math.round(item.durationMinutes)} mins` : `${durHrs} hour${durHrs > 1 ? 's' : ''}`,
-              status: item.status || "SCHEDULED",
-              rating: item.rating,
-              reviewCount: item.reviewCount,
-              aiMatchScore: item.aiMatchScore || 92,
-              address: item.address,
-              weatherAlert: item.weatherAlert,
-              openingHours: item.openingHours || "06:00 - 20:00 • Open Today",
-              transitInfo: item.transportFromPrevious || (actIdx === 0 ? `Local travel from ${destinationCity} Hub` : `Local travel from previous attraction`),
-              distanceFromPrev: item.distanceFromPrevious || (actIdx === 0 ? 4.2 : 5.5),
-              durationFromPrev: item.durationFromPrevious || (actIdx === 0 ? 15 : 20),
-              verificationStatus: item.verificationStatus || "100% Real Location • Verified"
-            };
-          }) : []
-        }));
+          return {
+            ...day,
+            weather: day.weatherCondition ? `${day.weatherCondition}, ${day.maxTempC || 30}°C` : "Sunny, 30°C",
+            theme: day.theme || `Day ${day.dayNumber} Exploration`,
+            activities: sortedItems.filter(item => item.status !== 'CANCELLED').map((item, actIdx) => {
+              const durHrs = (item.durationMinutes || 120) / 60;
+              const seq = globalSeq++;
+              
+              // Coordinates
+              let coords = (item.latitude && item.longitude) 
+                ? [item.latitude, item.longitude] 
+                : resolveKnownCoords(item.title);
+              
+              if (!coords) {
+                coords = [destCoords[0] + (actIdx * 0.008), destCoords[1] + (actIdx * 0.008)];
+              }
+
+              return {
+                id: item.id || `act-${dIdx}-${actIdx}`,
+                seq,
+                itemOrder: item.itemOrder != null ? item.itemOrder : actIdx,
+                dayId: day.id,
+                dayNumber: day.dayNumber,
+                time: item.startTime || (actIdx === 0 ? "09:00" : actIdx === 1 ? "12:00" : actIdx === 2 ? "15:00" : "18:00"),
+                type: item.category ? item.category.toLowerCase().replace(/[^a-z0-9]/g, '-') : "attraction",
+                category: item.category || "Sightseeing",
+                title: item.title,
+                location: item.indoorOutdoor || "Outdoor",
+                indoorOutdoor: item.indoorOutdoor || "Outdoor",
+                coordinates: coords,
+                description: item.recommendationReason || `Top-rated destination in ${data.destinationCity}`,
+                cost: item.costInr && item.costInr > 0 ? `₹${item.costInr}` : "Free Entry",
+                costNumeric: item.costInr || 0,
+                duration: item.durationMinutes ? `${Math.round(item.durationMinutes)} mins` : `${durHrs} hour${durHrs > 1 ? 's' : ''}`,
+                status: item.status || "SCHEDULED",
+                rating: item.rating,
+                reviewCount: item.reviewCount,
+                aiMatchScore: item.aiMatchScore || 92,
+                address: item.address,
+                weatherAlert: item.weatherAlert,
+                openingHours: item.openingHours || "06:00 - 20:00 • Open Today",
+                transitInfo: item.transportFromPrevious || (actIdx === 0 ? `Local travel from ${destinationCity} Hub` : `Local travel from previous attraction`),
+                distanceFromPrev: item.distanceFromPrevious || (actIdx === 0 ? 4.2 : 5.5),
+                durationFromPrev: item.durationFromPrevious || (actIdx === 0 ? 15 : 20),
+                verificationStatus: item.verificationStatus || "100% Real Location • Verified"
+              };
+            })
+          };
+        });
 
         // Calculate travel distances between consecutive activities
         data.days.forEach((day, dIdx) => {
@@ -468,6 +573,40 @@ const Itinerary = () => {
     setRescheduleTarget(activity);
     setRescheduleReason('Weather concern');
     setRescheduleAlternatives([]);
+    setActiveModalTab('recommendations');
+
+    const targetDay = trip?.days?.find(d => 
+      (d.items && d.items.some(it => it.id === activity.id)) ||
+      (d.activities && d.activities.some(a => a.id === activity.id))
+    ) || (trip?.days && trip.days[0]);
+
+    setManualForm({
+      placeName: '',
+      address: '',
+      latitude: null,
+      longitude: null,
+      dayId: targetDay ? targetDay.id : (trip?.days?.[0]?.id || null),
+      dayNumber: targetDay ? targetDay.dayNumber : 1,
+      startTime: activity.time || activity.startTime || '11:00',
+      durationMinutes: 90,
+      category: 'Sightseeing & Attractions',
+      notes: ''
+    });
+
+    setReplaceManualForm({
+      placeName: '',
+      address: '',
+      latitude: null,
+      longitude: null,
+      startTime: activity.time || activity.startTime || '11:00',
+      durationMinutes: activity.durationMinutes || 90,
+      category: 'Sightseeing & Attractions',
+      notes: ''
+    });
+
+    setEditingTimingId(null);
+    setPlaceEditDrafts({});
+    setIsSavingPlaceId(null);
     setShowRescheduleModal(true);
     setLoadingRescheduleAlts(true);
     try {
@@ -521,6 +660,285 @@ const Itinerary = () => {
       console.error('Failed to fetch alternatives for next destination', e);
     } finally {
       setLoadingNextAlternatives(false);
+    }
+  };
+
+  // Travel Pace Constraint Helper
+  const getPaceLimit = (paceStr) => {
+    const p = (paceStr || '').toLowerCase();
+    if (p.includes('relaxed') || p.includes('slow')) return { min: 1, max: 2, label: 'Relaxed Pace (1-2 places/day)' };
+    if (p.includes('fast') || p.includes('packed')) return { min: 5, max: 6, label: 'Fast Paced (5-6 places/day)' };
+    return { min: 3, max: 4, label: 'Moderate Pace (3-4 places/day)' };
+  };
+
+  // Destination Attractions Search Helper
+  const fetchDestinationAttractions = async (destination, query = '', prevCoords = null) => {
+    setLoadingDestAttractions(true);
+    try {
+      const pLat = prevCoords ? prevCoords[0] : null;
+      const pLon = prevCoords ? prevCoords[1] : null;
+      const results = await placesService.getDestinationAttractions(destination || trip?.destinationCity || 'Goa', query, pLat, pLon);
+      setDestinationAttractions(results || []);
+    } catch (e) {
+      console.error('Failed to search attractions', e);
+      setDestinationAttractions([]);
+    } finally {
+      setLoadingDestAttractions(false);
+    }
+  };
+
+  const handleSearchAttractionsChange = (val, prevCoords = null) => {
+    setSearchQuery(val);
+    if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
+    searchDebounceTimer.current = setTimeout(() => {
+      fetchDestinationAttractions(trip?.destinationCity, val, prevCoords);
+    }, 350);
+  };
+
+  // Direct Manual Place Addition (Inside Reschedule -> Manual Edit)
+  const handleDirectAddPlaceSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!manualForm.placeName || !manualForm.placeName.trim()) {
+      showToast('Please enter a place name.');
+      return;
+    }
+    const chosenDayId = manualForm.dayId || (trip?.days && trip.days[0]?.id);
+    if (!chosenDayId) {
+      showToast('Please select a day of visit.');
+      return;
+    }
+
+    const placeTitle = manualForm.placeName.trim();
+    showToast(`Adding "${placeTitle}" to itinerary...`);
+    try {
+      const fbCoords = resolveKnownCoords(placeTitle) || resolveKnownCoords(manualForm.address);
+      const lat = manualForm.latitude != null ? manualForm.latitude : (fbCoords ? fbCoords[0] : null);
+      const lng = manualForm.longitude != null ? manualForm.longitude : (fbCoords ? fbCoords[1] : null);
+      const detectedCat = (manualForm.category && manualForm.category !== 'Sightseeing' && manualForm.category !== 'Sightseeing & Attractions')
+        ? manualForm.category
+        : inferCategory(placeTitle, manualForm.address);
+
+      const payload = {
+        title: placeTitle,
+        address: manualForm.address?.trim() || null,
+        latitude: lat,
+        longitude: lng,
+        startTime: manualForm.startTime || '11:00',
+        durationMinutes: parseInt(manualForm.durationMinutes, 10) || 90,
+        category: detectedCat,
+        notes: manualForm.notes?.trim() || null,
+        recommendationReason: manualForm.notes?.trim() 
+          ? `Manually added by traveller: ${manualForm.notes.trim()}` 
+          : 'Manually added by traveller',
+        costInr: 0,
+        indoorOutdoor: 'Outdoor'
+      };
+
+      await tripService.addActivity(trip.id, chosenDayId, payload);
+      await loadTripData();
+      setManualForm(prev => ({
+        ...prev,
+        placeName: '',
+        address: '',
+        latitude: null,
+        longitude: null,
+        notes: ''
+      }));
+      showToast(`✓ Added "${placeTitle}" to itinerary successfully!`);
+    } catch (err) {
+      console.error('Failed to add place manually', err);
+      showToast('Could not add place. Please try again.');
+    }
+  };
+
+  // Replace Target Activity with Custom Place (Inside Reschedule -> Manual Edit)
+  const handleReplaceWithManualPlaceSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!replaceManualForm.placeName || !replaceManualForm.placeName.trim()) {
+      showToast('Please enter a replacement place name.');
+      return;
+    }
+    if (!rescheduleTarget) return;
+
+    const repName = replaceManualForm.placeName.trim();
+    showToast(`Replacing "${rescheduleTarget.title}" with "${repName}"...`);
+    try {
+      const fbCoords = resolveKnownCoords(repName) || resolveKnownCoords(replaceManualForm.address);
+      const lat = replaceManualForm.latitude != null ? replaceManualForm.latitude : (fbCoords ? fbCoords[0] : null);
+      const lng = replaceManualForm.longitude != null ? replaceManualForm.longitude : (fbCoords ? fbCoords[1] : null);
+      const detectedCat = (replaceManualForm.category && replaceManualForm.category !== 'Sightseeing' && replaceManualForm.category !== 'Sightseeing & Attractions')
+        ? replaceManualForm.category
+        : inferCategory(repName, replaceManualForm.address);
+
+      const payload = {
+        title: repName,
+        address: replaceManualForm.address?.trim() || null,
+        latitude: lat,
+        longitude: lng,
+        startTime: replaceManualForm.startTime || rescheduleTarget.time || '11:00',
+        durationMinutes: parseInt(replaceManualForm.durationMinutes, 10) || 90,
+        category: detectedCat,
+        notes: replaceManualForm.notes?.trim() || null,
+        recommendationReason: replaceManualForm.notes?.trim()
+          ? `Manually added by traveller: ${replaceManualForm.notes.trim()}`
+          : 'Manually added by traveller',
+        costInr: 0,
+        indoorOutdoor: 'Outdoor'
+      };
+
+      await tripService.replaceActivity(trip.id, rescheduleTarget.id, payload);
+      await loadTripData();
+      setShowRescheduleModal(false);
+      setReplaceManualForm({
+        placeName: '',
+        address: '',
+        latitude: null,
+        longitude: null,
+        startTime: '11:00',
+        durationMinutes: 90,
+        category: 'Sightseeing & Attractions',
+        notes: ''
+      });
+      showToast(`✓ Replaced with "${repName}". Itinerary updated!`);
+    } catch (err) {
+      console.error('Failed to replace place manually', err);
+      showToast('Could not replace place. Please try again.');
+    }
+  };
+
+  // Save Place Movement & Order Changes (Combined Day & Position)
+  const handleSavePlaceChanges = async (activityId, sourceDayId) => {
+    const draft = placeEditDrafts[activityId];
+    if (!draft) return;
+    const targetDayId = draft.dayId || sourceDayId;
+    const targetPosition = draft.position;
+
+    setIsSavingPlaceId(activityId);
+    showToast('Saving place changes & recalculating schedule...');
+    try {
+      await tripService.moveActivityToDay(trip.id || id, activityId, targetDayId, targetPosition);
+      setPlaceEditDrafts(prev => {
+        const next = { ...prev };
+        delete next[activityId];
+        return next;
+      });
+      await loadTripData();
+      showToast('✓ Place moved and itinerary schedule saved successfully!');
+    } catch (err) {
+      console.error('Failed to save place changes', err);
+      const errMsg = err.response?.data?.message || err.message || 'Could not move place. Please try again.';
+      showToast(`Error: ${errMsg}`);
+    } finally {
+      setIsSavingPlaceId(null);
+    }
+  };
+
+  const handleCancelPlaceChanges = (activityId) => {
+    setPlaceEditDrafts(prev => {
+      const next = { ...prev };
+      delete next[activityId];
+      return next;
+    });
+  };
+
+  // Move Place Between Days (Direct action or fallback)
+  const handleMoveActivityBetweenDays = async (activityId, targetDayId, targetPosition = null) => {
+    if (!targetDayId) return;
+    showToast('Moving place to new day & recalculating schedules...');
+    try {
+      await tripService.moveActivityToDay(trip.id || id, activityId, targetDayId, targetPosition);
+      setPlaceEditDrafts(prev => {
+        const next = { ...prev };
+        delete next[activityId];
+        return next;
+      });
+      await loadTripData();
+      showToast('✓ Place moved to new day successfully!');
+    } catch (err) {
+      console.error('Failed to move place between days', err);
+      const errMsg = err.response?.data?.message || err.message || 'Could not move place. Please try again.';
+      showToast(`Error: ${errMsg}`);
+    }
+  };
+
+  // Update Activity Timing / Duration (Inside Reschedule -> Manual Edit)
+  const handleUpdateActivityTiming = async (activityId, newStartTime, newDurationMinutes) => {
+    showToast('Updating visit schedule...');
+    try {
+      await tripService.updateActivity(trip.id || id, activityId, {
+        startTime: newStartTime,
+        durationMinutes: parseInt(newDurationMinutes, 10) || 90
+      });
+      await loadTripData();
+      showToast('✓ Place schedule updated!');
+    } catch (err) {
+      console.error('Failed to update place timing', err);
+      const errMsg = err.response?.data?.message || err.message || 'Could not update timing. Please try again.';
+      showToast(`Error: ${errMsg}`);
+    }
+  };
+
+  // Manual Reordering: Move Up / Move Down (Accepts ID, object, or index)
+  const handleMoveActivity = async (day, activityOrIndex, direction) => {
+    const activeActs = (day.activities || []).filter(a => a.status !== 'CANCELLED' && a.status !== 'REPLACED');
+    let actIndex = -1;
+    let targetAct = null;
+
+    if (typeof activityOrIndex === 'object' && activityOrIndex !== null) {
+      targetAct = activityOrIndex;
+      actIndex = activeActs.findIndex(a => String(a.id) === String(targetAct.id));
+    } else {
+      actIndex = activeActs.findIndex(a => String(a.id) === String(activityOrIndex));
+      if (actIndex === -1 && typeof activityOrIndex === 'number' && activityOrIndex >= 0 && activityOrIndex < activeActs.length) {
+        actIndex = activityOrIndex;
+      }
+      targetAct = activeActs[actIndex];
+    }
+
+    if (!targetAct || actIndex === -1) return;
+    const newActiveIndex = actIndex + direction;
+
+    if (newActiveIndex < 0 || newActiveIndex >= activeActs.length) return;
+
+    showToast(`Moving "${targetAct.title}" to position #${newActiveIndex + 1} & recalculating travel times...`);
+    try {
+      await tripService.moveActivityToDay(trip.id || id, targetAct.id, day.id, newActiveIndex + 1);
+      setPlaceEditDrafts(prev => {
+        const next = { ...prev };
+        delete next[targetAct.id];
+        return next;
+      });
+      await loadTripData();
+      showToast(`✓ Visit order updated: "${targetAct.title}" is now #${newActiveIndex + 1}`);
+    } catch (e) {
+      console.error('Failed to reorder activities', e);
+      const errMsg = e.response?.data?.message || e.message || 'Could not reorder activities. Please try again.';
+      showToast(`Error: ${errMsg}`);
+    }
+  };
+
+  // Direct Position Reordering (e.g. Move place 3 to place 1)
+  const handleReorderToPosition = async (day, fromIndex, toIndex) => {
+    const activeActs = (day.activities || []).filter(a => a.status !== 'CANCELLED' && a.status !== 'REPLACED');
+    if (fromIndex < 0 || fromIndex >= activeActs.length || toIndex < 0 || toIndex >= activeActs.length || fromIndex === toIndex) return;
+
+    const targetAct = activeActs[fromIndex];
+    if (!targetAct) return;
+
+    showToast(`Moving "${targetAct.title}" to position #${toIndex + 1} & recalculating travel times...`);
+    try {
+      await tripService.moveActivityToDay(trip.id, targetAct.id, day.id, toIndex + 1);
+      setPlaceEditDrafts(prev => {
+        const next = { ...prev };
+        delete next[targetAct.id];
+        return next;
+      });
+      await loadTripData();
+      showToast(`✓ "${targetAct.title}" moved to position #${toIndex + 1}!`);
+    } catch (e) {
+      console.error('Failed to reorder activities to position', e);
+      const errMsg = e.response?.data?.message || e.message || 'Could not reorder activities. Please try again.';
+      showToast(`Error: ${errMsg}`);
     }
   };
 
@@ -804,84 +1222,8 @@ const Itinerary = () => {
     }
   };
 
-  // Conversational Refinement Engine
-  const handleRefineSubmit = (instructionText) => {
-    const text = instructionText || userInput;
-    if (!text.trim() || isRefining) return;
 
-    setUserInput('');
-    setIsRefining(true);
 
-    // Add user message
-    setChatMessages(prev => [...prev, { sender: 'user', text }]);
-
-    setTimeout(() => {
-      const lower = text.toLowerCase();
-      let aiExplanation = "";
-      let modifiedTrip = { ...trip };
-
-      if (lower.includes("relaxed") || lower.includes("slow") || lower.includes("pace")) {
-        modifiedTrip.days = modifiedTrip.days.map(day => ({
-          ...day,
-          theme: "Relaxed & Leisurely Pace",
-          activities: day.activities.map((a, idx) => ({
-            ...a,
-            time: idx === 0 ? "10:30" : idx === 1 ? "13:30" : "16:30",
-            duration: "2.5 hours"
-          }))
-        }));
-        aiExplanation = `I've updated your schedule to a relaxed pace: pushed the morning start time to 10:30 AM and added generous buffer times between attractions.`;
-      } else if (lower.includes("food") || lower.includes("culinary") || lower.includes("restaurant") || lower.includes("eat")) {
-        const foodSpotName = `${trip.destinationCity} Traditional Food Trail & Local Sweets`;
-        modifiedTrip.days = modifiedTrip.days.map((day, idx) => {
-          const newActivities = [...day.activities];
-          if (newActivities.length > 1) {
-            newActivities.splice(1, 0, {
-              id: 9900 + idx,
-              time: "13:00",
-              type: "food",
-              category: "Culinary Experience",
-              title: foodSpotName,
-              location: "Indoor Dining",
-              description: `Authentic regional culinary stop tasting traditional ${trip.destinationCity} delicacies.`,
-              cost: "₹350",
-              costNumeric: 350,
-              duration: "1.5 hours",
-              status: "ACTIVE",
-              transitInfo: "10 mins transit",
-              coordinates: day.activities[0]?.coordinates
-            });
-          }
-          return { ...day, activities: newActivities };
-        });
-        aiExplanation = `Added authentic regional culinary stops to your itinerary, including local food trails and traditional lunch experiences in ${trip.destinationCity}.`;
-      } else if (lower.includes("early morning") || lower.includes("morning")) {
-        modifiedTrip.days = modifiedTrip.days.map(day => ({
-          ...day,
-          activities: day.activities.map((a, idx) => ({
-            ...a,
-            time: idx === 0 ? "11:00" : idx === 1 ? "14:00" : "17:00"
-          }))
-        }));
-        aiExplanation = `No problem! I've eliminated early morning alarms. Your days now begin comfortably from 11:00 AM onwards.`;
-      } else if (lower.includes("history") || lower.includes("historical") || lower.includes("fort") || lower.includes("temple")) {
-        aiExplanation = `Prioritized the top ancient forts, rock-cut architecture, and heritage monuments for ${trip.destinationCity}.`;
-      } else if (lower.includes("budget") || lower.includes("20000") || lower.includes("reduce")) {
-        const newBudget = 20000;
-        modifiedTrip.budgetInr = newBudget;
-        aiExplanation = `Recalculated your budget to ₹${newBudget.toLocaleString('en-IN')}: prioritized free entry heritage walks and economical local transit.`;
-      } else if (lower.includes("rain") || lower.includes("weather")) {
-        handleAdaptDay(modifiedTrip.days[0]?.id || 1);
-        aiExplanation = `Activated weather adaptation: replaced outdoor spots on rainy days with verified covered museums and indoor galleries.`;
-      } else {
-        aiExplanation = `Understood! I've recalibrated the itinerary to reflect "${text}".`;
-      }
-
-      setTrip(modifiedTrip);
-      setChatMessages(prev => [...prev, { sender: 'ai', text: aiExplanation }]);
-      setIsRefining(false);
-    }, 600);
-  };
 
   if (loading) {
     return (
@@ -908,7 +1250,6 @@ const Itinerary = () => {
   const userRole = isOwner ? 'OWNER' : (currentMember ? currentMember.role : (currentUserEmail ? 'VIEWER' : 'OWNER'));
   const canEdit = userRole === 'OWNER' || userRole === 'EDITOR';
   const canInvite = isOwner;
-  const isViewer = userRole === 'VIEWER';
 
   const acceptedMembers = trip?.members?.filter(m => m.status === 'ACCEPTED') || [];
   const pendingMembers = trip?.members?.filter(m => m.status === 'PENDING') || [];
@@ -940,7 +1281,7 @@ const Itinerary = () => {
   return (
     <div className="itinerary-container animate-fade-in">
       <Link to="/dashboard" className="back-link">
-        <ArrowLeft size={18} /> Back to Dashboard
+        <ArrowLeft size={18} /> {t('itinerary.backToDashboard')}
       </Link>
 
       {/* HEADER WITH REAL-WORLD VERIFICATION BADGES */}
@@ -950,17 +1291,17 @@ const Itinerary = () => {
             <CheckCircle2 size={15} /> 100% Verified Real-World Indian Itinerary
           </div>
           <div className="live-clock-pill">
-            <Clock size={14} /> Current Time: {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} IST
+            <Clock size={14} /> {t('itinerary.currentTime', { time: currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })}
           </div>
         </div>
 
         <div className="header-main-content">
-          <h1>{trip.title || `Trip to ${trip.destinationCity}`}</h1>
+          <h1>{trip.title ? formatTripTitle(trip.title, trip.destinationCity) : formatTripTitle(`Trip to ${trip.destinationCity}`, trip.destinationCity)}</h1>
           <div className="header-meta-tags">
-            <span className="meta-tag-pill"><MapPin size={15} /> {trip.destinationCity}</span>
-            <span className="meta-tag-pill"><Calendar size={15} /> {trip.startDate} - {trip.endDate} ({trip.days?.length || 1} Days)</span>
-            <span className="meta-tag-pill"><DollarSign size={15} /> Budget: ₹{(trip.budgetInr || 30000).toLocaleString('en-IN')}</span>
-            <span className="meta-tag-pill"><Compass size={15} /> Style: {trip.travelStyle || 'Solo'}</span>
+            <span className="meta-tag-pill"><MapPin size={15} /> {getDestName(trip.destinationCity)}</span>
+            <span className="meta-tag-pill"><Calendar size={15} /> {trip.startDate} - {trip.endDate} ({trip.days?.length || 1} {t('dashboard.days', { count: '' }).trim() || 'Days'})</span>
+            <span className="meta-tag-pill"><DollarSign size={15} /> {t('itinerary.budgetLabel', { amount: (trip.budgetInr || 30000).toLocaleString('en-IN') })}</span>
+            <span className="meta-tag-pill"><Compass size={15} /> {t('itinerary.styleLabel', { style: trip.travelStyle || 'Solo' })}</span>
           </div>
         </div>
 
@@ -971,7 +1312,7 @@ const Itinerary = () => {
               <span className="completed-check-icon">✓</span>
               <div className="completed-text">
                 <span className="completed-title">{lastCompleted.title}</span>
-                <span className="completed-badge-label">Completed</span>
+                <span className="completed-badge-label">{t('itinerary.completed')}</span>
               </div>
             </div>
           )}
@@ -981,7 +1322,7 @@ const Itinerary = () => {
               {lastCompleted && <span className="status-flow-arrow">→</span>}
               <div className="status-indicator">
                 <span className="status-ping"></span>
-                <strong>Scheduled Next:</strong>
+                <strong>{t('itinerary.scheduledNext')}</strong>
               </div>
               <div className="status-details">
                 <span className="status-title">{nextActivity.title}</span>
@@ -990,7 +1331,7 @@ const Itinerary = () => {
               </div>
               {nextActivity.upNextItems && nextActivity.upNextItems.length > 0 && (
                 <div className="up-next-preview-box">
-                  <span className="up-next-tag">Up Next:</span>
+                  <span className="up-next-tag">{t('itinerary.upNext')}</span>
                   {nextActivity.upNextItems.map((item, idx) => (
                     <span key={item.id || idx} className="up-next-chip">
                       #{item.seq} {item.title} ({item.time})
@@ -1004,21 +1345,21 @@ const Itinerary = () => {
                   onClick={() => handleLocateOnMap(nextActivity)}
                   title="Locate next activity on Map"
                 >
-                  <Navigation size={13} /> Locate on Map
+                  <Navigation size={13} /> {t('itinerary.locateOnMap')}
                 </button>
                 <button
                   className="simulate-check-btn"
                   onClick={() => handleMarkCompleted(nextActivity.id, 'rain')}
                   title="Test adaptive flow: simulate adverse weather at this destination"
                 >
-                  🌧️ Test Rain Alert
+                  {t('itinerary.testRain')}
                 </button>
               </div>
             </>
           ) : (
             <div className="status-all-completed">
               <CheckCircle2 size={16} className="text-emerald" />
-              <span>All activities in this itinerary are completed!</span>
+              <span>{t('itinerary.allCompleted')}</span>
             </div>
           )}
         </div>
@@ -1028,23 +1369,25 @@ const Itinerary = () => {
       <div className="dashboard-quick-actions-bar animate-fade-in">
         {canEdit && (
           <button className="quick-action-btn edit-trip-btn" onClick={handleOpenEditModal}>
-            <Edit3 size={15} /> Edit Trip
+            <Edit3 size={15} /> {t('itinerary.editTrip')}
           </button>
         )}
         {canInvite && (
           <button className="quick-action-btn invite-btn" onClick={() => setShowInviteModal(true)}>
-            <UserPlus size={15} /> + Invite Travellers
+            <UserPlus size={15} /> {t('itinerary.inviteTravellers')}
           </button>
         )}
         <button className="quick-action-btn" onClick={() => document.getElementById('map-view-section')?.scrollIntoView({ behavior: 'smooth' })}>
-          <MapPin size={15} /> View Map
+          <MapPin size={15} /> {t('itinerary.viewMap')}
         </button>
         <button className="quick-action-btn" onClick={() => document.getElementById('itinerary-schedule-section')?.scrollIntoView({ behavior: 'smooth' })}>
-          <Calendar size={15} /> View Itinerary
+          <Calendar size={15} /> {t('itinerary.viewItinerary')}
         </button>
+        {/* Temporarily hidden per user request: Share Trip
         <button className="quick-action-btn" onClick={handleShareTrip}>
           <Share2 size={15} /> Share Trip
         </button>
+        */}
       </div>
 
       {/* TRIP DASHBOARD OVERVIEW & PROGRESS */}
@@ -1204,11 +1547,87 @@ const Itinerary = () => {
                     <span className="day-number-badge">Day {day.dayNumber}</span>
                     <h2>{day.theme}</h2>
                   </div>
-                  <div className="day-weather-badge">
-                    {day.weather.includes("Rain") ? <CloudRain size={16} className="text-blue" /> : <Sun size={16} className="text-amber" />}
-                    <span>{day.weather}</span>
+                  <div className="day-header-actions">
+                    <div className="day-weather-badge">
+                      {day.weather.includes("Rain") ? <CloudRain size={16} className="text-blue" /> : <Sun size={16} className="text-amber" />}
+                      <span>{day.weather}</span>
+                    </div>
                   </div>
                 </div>
+
+                {/* COMPACT DAILY ROUTE SUMMARY */}
+                {(() => {
+                  const activeDayActs = (day.activities || []).filter(a => a.status !== 'CANCELLED' && a.status !== 'REPLACED');
+                  const totalDayDist = activeDayActs.reduce((acc, a) => {
+                    const val = typeof a.distanceFromPrev === 'number' ? a.distanceFromPrev : parseFloat(a.transitDist || a.distanceFromPrev || 0);
+                    return acc + (isNaN(val) ? 0 : val);
+                  }, 0);
+                  const totalDayMins = activeDayActs.reduce((acc, a) => {
+                    const val = typeof a.durationFromPrev === 'number' ? a.durationFromPrev : parseInt(a.transitTime || a.durationFromPrev || 0);
+                    return acc + (isNaN(val) ? 15 : val);
+                  }, 0);
+
+                  const hours = Math.floor(totalDayMins / 60);
+                  const mins = totalDayMins % 60;
+                  const timeFormatted = hours > 0 ? `${hours}h ${mins > 0 ? `${mins}m` : ''}` : `${mins} mins`;
+
+                  return (
+                    <div className="daily-route-summary-banner">
+                      <div className="daily-summary-stats">
+                        <div className="daily-stat-chip">
+                          <MapPin size={14} style={{ color: '#0284c7' }} />
+                          <span><strong>{activeDayActs.length}</strong> Attractions</span>
+                        </div>
+                        <div className="daily-stat-chip">
+                          <Navigation size={14} style={{ color: '#10b981' }} />
+                          <span>Est. <strong>{Math.round(totalDayDist * 10) / 10} km</strong> travel</span>
+                        </div>
+                        <div className="daily-stat-chip">
+                          <Clock size={14} style={{ color: '#f59e0b' }} />
+                          <span>Est. <strong>{timeFormatted}</strong> transit</span>
+                        </div>
+                      </div>
+
+                      {activeDayActs.length > 0 && (
+                        <div className="daily-visiting-sequence-row">
+                          <span className="sequence-label">Route Sequence:</span>
+                          <div className="sequence-trail">
+                            {activeDayActs.map((act, idx) => (
+                              <React.Fragment key={act.id}>
+                                <button 
+                                  type="button"
+                                  className={`sequence-step-pill ${selectedActivityId === act.id ? 'active' : ''}`}
+                                  onClick={() => handleLocateOnMap(act)}
+                                  title={`Stop #${act.seq}: ${act.title}`}
+                                >
+                                  <span className="step-num">#{act.seq}</span>
+                                  <span className="step-title">{act.title}</span>
+                                </button>
+                                {idx < activeDayActs.length - 1 && <span className="sequence-arrow">→</span>}
+                              </React.Fragment>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="daily-summary-action">
+                        <button 
+                          type="button"
+                          className="btn-view-day-map"
+                          onClick={() => {
+                            if (activeDayActs.length > 0) {
+                              handleLocateOnMap(activeDayActs[0]);
+                            } else {
+                              document.getElementById('map-view-section')?.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                        >
+                          <Compass size={14} /> Open Day {day.dayNumber} Route on Map
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* ADAPTIVE WEATHER ADVISORY */}
                 {day.hasWeatherAlert && !weatherAlertDismissed[day.id] && (
@@ -1281,6 +1700,11 @@ const Itinerary = () => {
                               {activity.description?.includes('AI Weather Adapted') && (
                                 <span className="status-tag adapted">🌧️ Weather-Protected</span>
                               )}
+                              {(activity.description?.toLowerCase().includes('manual') || activity.verificationStatus?.toLowerCase().includes('manual') || activity.recommendationReason?.toLowerCase().includes('manual') || !activity.attractionId) && (
+                                <span className="manual-badge">
+                                  ✏️ Custom Place
+                                </span>
+                              )}
                               <span className="category-tag">{activity.category}</span>
                             </div>
                           </div>
@@ -1312,8 +1736,37 @@ const Itinerary = () => {
                             </span>
                           </div>
 
-                          {/* ACTIVITY ACTIONS TOOLBAR (Complete, Reschedule, Remove, Map) */}
+                          {/* ACTIVITY ACTIONS TOOLBAR (Complete, Reschedule, Remove, Map, Reorder) */}
                           <div className="activity-actions-toolbar">
+                            {canEdit && (() => {
+                              const activeActs = (day.activities || []).filter(a => a.status !== 'CANCELLED' && a.status !== 'REPLACED');
+                              const currentActiveIdx = activeActs.findIndex(a => String(a.id) === String(activity.id));
+                              const isFirst = currentActiveIdx <= 0;
+                              const isLast = currentActiveIdx === -1 || currentActiveIdx >= activeActs.length - 1;
+                              return (
+                                <div className="activity-reorder-wrap" title="Change visiting order">
+                                  <button 
+                                    type="button"
+                                    className="btn-reorder"
+                                    onClick={() => handleMoveActivity(day, activity.id, -1)}
+                                    disabled={isFirst}
+                                    title="Move Up (visit earlier)"
+                                  >
+                                    <ChevronUp size={14} />
+                                  </button>
+                                  <button 
+                                    type="button"
+                                    className="btn-reorder"
+                                    onClick={() => handleMoveActivity(day, activity.id, 1)}
+                                    disabled={isLast}
+                                    title="Move Down (visit later)"
+                                  >
+                                    <ChevronDown size={14} />
+                                  </button>
+                                </div>
+                              );
+                            })()}
+
                             {activity.status !== 'COMPLETED' ? (
                               <button 
                                 className="btn-act-action btn-complete"
@@ -1363,74 +1816,6 @@ const Itinerary = () => {
               </div>
             ))}
           </div>
-
-          {/* CONVERSATIONAL TRIP REFINEMENT ASSISTANT */}
-          <div className="refinement-card-modern">
-            <div className="refinement-header">
-              <div className="assistant-avatar">
-                <Bot size={20} />
-              </div>
-              <div>
-                <h3>TravelMate Conversational Assistant</h3>
-                <p>Refine your itinerary interactively with natural language.</p>
-              </div>
-            </div>
-
-            <div className="chat-messages-container">
-              {chatMessages.map((msg, i) => (
-                <div key={i} className={`chat-bubble-row ${msg.sender}`}>
-                  <div className="chat-bubble">
-                    {msg.sender === 'ai' && <Bot size={14} className="bubble-bot-icon" />}
-                    <span>{msg.text}</span>
-                  </div>
-                </div>
-              ))}
-              {isRefining && (
-                <div className="chat-bubble-row ai">
-                  <div className="chat-bubble thinking">
-                    <RefreshCw size={14} className="spin" />
-                    <span>Recalibrating itinerary with real-world constraints...</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Quick Suggestion Chips */}
-            <div className="quick-refine-chips">
-              <button onClick={() => handleRefineSubmit("Make it more relaxed")}>
-                ✨ Make it more relaxed
-              </button>
-              <button onClick={() => handleRefineSubmit("Add more food experiences")}>
-                🍜 Add authentic food trails
-              </button>
-              <button onClick={() => handleRefineSubmit("I don't want early morning activities")}>
-                ☕ No early mornings
-              </button>
-              <button onClick={() => handleRefineSubmit("Reduce budget to ₹20,000")}>
-                💰 Reduce budget to ₹20,000
-              </button>
-            </div>
-
-            <form 
-              className="chat-input-bar"
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleRefineSubmit();
-              }}
-            >
-              <input 
-                type="text" 
-                placeholder="Ask me anything: e.g., 'Add more temples', 'Make it slower', 'It might rain'..."
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                disabled={isRefining}
-              />
-              <button type="submit" disabled={isRefining || !userInput.trim()}>
-                <Send size={15} />
-              </button>
-            </form>
-          </div>
-
         </div>
 
         {/* RIGHT COLUMN: STICKY MAP, ROUTE FLOW & BUDGET BREAKDOWN */}
@@ -1524,7 +1909,7 @@ const Itinerary = () => {
               >
                 <div className="flow-node-badge origin">🟢</div>
                 <div className="flow-node-content">
-                  <strong>{trip.startingLocation || 'Origin'}</strong>
+                  <strong>{getDestName(trip.startingLocation) || 'Origin'}</strong>
                   <span className="flow-sub">Journey Starting Point</span>
                 </div>
               </div>
@@ -1544,7 +1929,7 @@ const Itinerary = () => {
               >
                 <div className="flow-node-badge hub">📍</div>
                 <div className="flow-node-content">
-                  <strong>{trip.destinationCity}</strong>
+                  <strong>{getDestName(trip.destinationCity)}</strong>
                   <span className="flow-sub">Destination Hub & Base</span>
                 </div>
               </div>
@@ -1634,12 +2019,12 @@ const Itinerary = () => {
                 {trip.originCoords && (
                   <Marker 
                     position={trip.originCoords} 
-                    icon={createOriginIcon(trip.startingLocation, selectedActivityCoord === trip.originCoords)}
+                    icon={createOriginIcon(getDestName(trip.startingLocation), selectedActivityCoord === trip.originCoords)}
                   >
                     <Popup>
                       <div className="map-popup-custom">
                         <span className="popup-badge origin-badge">🟢 Origin</span>
-                        <h4>{trip.startingLocation}</h4>
+                        <h4>{getDestName(trip.startingLocation)}</h4>
                         <p>Starting point of your trip</p>
                       </div>
                     </Popup>
@@ -1650,12 +2035,12 @@ const Itinerary = () => {
                 {trip.destinationCoords && (
                   <Marker 
                     position={trip.destinationCoords} 
-                    icon={createHubIcon(trip.destinationCity, selectedActivityCoord === trip.destinationCoords)}
+                    icon={createHubIcon(getDestName(trip.destinationCity), selectedActivityCoord === trip.destinationCoords)}
                   >
                     <Popup>
                       <div className="map-popup-custom">
                         <span className="popup-badge hub-badge">📍 Destination Hub</span>
-                        <h4>{trip.destinationCity}</h4>
+                        <h4>{getDestName(trip.destinationCity)}</h4>
                         <p>Base city for regional exploration</p>
                       </div>
                     </Popup>
@@ -1891,82 +2276,726 @@ const Itinerary = () => {
       )}
 
       {/* ==========================================
-          SINGLE PLACE RESCHEDULE MODAL
+          SINGLE PLACE RESCHEDULE / REPLACE MODAL
           ========================================== */}
       {showRescheduleModal && rescheduleTarget && (
         <div className="modal-backdrop">
-          <div className="reschedule-modal animate-scale-up">
+          <div className="reschedule-modal animate-scale-up" style={{ maxWidth: activeModalTab === 'manual' ? '780px' : '640px', width: '92%', maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="modal-reschedule-header">
               <div className="reschedule-icon-wrap">
                 <RefreshCw size={22} className="reschedule-icon" />
               </div>
               <div>
-                <h3>Reschedule Place: {rescheduleTarget.title}</h3>
-                <p>Rest of your itinerary will remain unchanged.</p>
+                <h3>Reschedule: {rescheduleTarget.title}</h3>
+                <p>Modify, replace, or customize your itinerary seamlessly.</p>
               </div>
               <button className="modal-close-btn" onClick={() => setShowRescheduleModal(false)}>✕</button>
             </div>
 
-            <div className="reschedule-reason-box">
-              <label>Why would you like to replace this?</label>
-              <select 
-                value={rescheduleReason} 
-                onChange={(e) => handleReasonChange(e.target.value)}
-                className="reason-select"
+            {/* Modal Tabs: AI Recommendations, Search Verified Attractions, Manual Edit */}
+            <div className="modal-tabs-header">
+              <button 
+                type="button"
+                className={`modal-tab-btn ${activeModalTab === 'recommendations' ? 'active' : ''}`}
+                onClick={() => setActiveModalTab('recommendations')}
               >
-                <option value="Too far">Too far</option>
-                <option value="Too expensive">Too expensive</option>
-                <option value="Not interested">Not interested</option>
-                <option value="Weather concern">Weather concern</option>
-                <option value="Already visited">Already visited</option>
-                <option value="Too crowded">Too crowded</option>
-                <option value="Other">Other</option>
-              </select>
+                <Sparkles size={14} /> AI Recommendations
+              </button>
+              <button 
+                type="button"
+                className={`modal-tab-btn ${activeModalTab === 'search' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveModalTab('search');
+                  if (destinationAttractions.length === 0) {
+                    fetchDestinationAttractions(trip.destinationCity, '', rescheduleTarget.coordinates);
+                  }
+                }}
+              >
+                <Search size={14} /> Search Verified Attractions
+              </button>
+              <button 
+                type="button"
+                className={`modal-tab-btn ${activeModalTab === 'manual' ? 'active' : ''}`}
+                onClick={() => setActiveModalTab('manual')}
+              >
+                <Edit3 size={14} /> Manual Edit
+              </button>
             </div>
 
-            <div className="reschedule-candidates-section">
-              <h4>Recommended Verified Alternatives for {trip.destinationCity}:</h4>
-              {loadingRescheduleAlts ? (
-                <div className="alts-loading">
-                  <RefreshCw size={20} className="spin" />
-                  <p>Searching verified database for places matching "{rescheduleReason}"...</p>
+            {activeModalTab === 'recommendations' ? (
+              <>
+                <div className="reschedule-reason-box">
+                  <label>Why would you like to replace this?</label>
+                  <select 
+                    value={rescheduleReason} 
+                    onChange={(e) => handleReasonChange(e.target.value)}
+                    className="reason-select"
+                  >
+                    <option value="Too far">Too far</option>
+                    <option value="Too expensive">Too expensive</option>
+                    <option value="Not interested">Not interested</option>
+                    <option value="Weather concern">Weather concern</option>
+                    <option value="Already visited">Already visited</option>
+                    <option value="Too crowded">Too crowded</option>
+                    <option value="Other">Other</option>
+                  </select>
                 </div>
-              ) : rescheduleAlternatives.length === 0 ? (
-                <p className="no-alts-msg">No verified alternatives found matching current filters.</p>
-              ) : (
-                <div className="alternatives-list-scroll">
-                  {rescheduleAlternatives.map((alt) => (
-                    <div key={alt.id} className="alternative-candidate-card">
-                      <div className="candidate-info">
-                        <div className="candidate-header">
-                          <h5>{alt.title}</h5>
-                          <span className="candidate-category">{alt.category}</span>
+
+                <div className="reschedule-candidates-section">
+                  <h4>Recommended Alternatives for {getDestName(trip.destinationCity)}:</h4>
+                  {loadingRescheduleAlts ? (
+                    <div className="alts-loading">
+                      <RefreshCw size={20} className="spin" />
+                      <p>Searching verified database for places matching "{rescheduleReason}"...</p>
+                    </div>
+                  ) : rescheduleAlternatives.length === 0 ? (
+                    <p className="no-alts-msg">No verified alternatives found matching current filters.</p>
+                  ) : (
+                    <div className="alternatives-list-scroll">
+                      {rescheduleAlternatives.map((alt) => (
+                        <div key={alt.id} className="alternative-candidate-card">
+                          <div className="candidate-info">
+                            <div className="candidate-header">
+                              <h5>{alt.title}</h5>
+                              <span className="candidate-category">{alt.category}</span>
+                            </div>
+                            <p className="candidate-desc">{alt.recommendationReason || alt.address}</p>
+                            <div className="candidate-meta">
+                              <span className="alt-meta-tag"><DollarSign size={12} /> {alt.costInr > 0 ? `₹${alt.costInr}` : 'Free Entry'}</span>
+                              <span className="alt-meta-tag"><MapPin size={12} /> {alt.indoorOutdoor}</span>
+                              <span className="alt-meta-tag">
+                                {formatRating(alt.rating, alt.reviewCount)}
+                              </span>
+                              <span className="alt-match-tag">✨ Match: {Math.round(alt.aiMatchScore || 90)}%</span>
+                            </div>
+                          </div>
+                          <button 
+                            className="btn-choose-alt"
+                            onClick={() => handleSelectAlternative(rescheduleTarget.id, alt)}
+                          >
+                            Replace with This Place
+                          </button>
                         </div>
-                        <p className="candidate-desc">{alt.recommendationReason || alt.address}</p>
-                        <div className="candidate-meta">
-                          <span className="alt-meta-tag"><DollarSign size={12} /> {alt.costInr > 0 ? `₹${alt.costInr}` : 'Free Entry'}</span>
-                          <span className="alt-meta-tag"><MapPin size={12} /> {alt.indoorOutdoor}</span>
-                          <span className="alt-meta-tag">
-                            {formatRating(alt.rating, alt.reviewCount)}
-                          </span>
-                          <span className="alt-match-tag">✨ Match: {Math.round(alt.aiMatchScore || 90)}%</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : activeModalTab === 'search' ? (
+              /* Search Tab in Reschedule */
+              <div className="reschedule-candidates-section">
+                <div className="modal-search-box">
+                  <Search size={16} className="modal-search-icon" />
+                  <input 
+                    type="text" 
+                    className="modal-search-input"
+                    placeholder={`Search verified attractions in ${getDestName(trip.destinationCity)}...`}
+                    value={searchQuery}
+                    onChange={(e) => handleSearchAttractionsChange(e.target.value, rescheduleTarget.coordinates)}
+                  />
+                </div>
+
+                {loadingDestAttractions ? (
+                  <div className="alts-loading">
+                    <RefreshCw size={20} className="spin" />
+                    <p>Searching verified database...</p>
+                  </div>
+                ) : destinationAttractions.length === 0 ? (
+                  <p className="no-alts-msg">No verified attractions found matching "{searchQuery}".</p>
+                ) : (
+                  <div className="alternatives-list-scroll">
+                    {destinationAttractions.map((attr) => (
+                      <div key={attr.id} className="dest-attraction-card">
+                        <div className="dest-card-thumb">
+                          <SafeImage 
+                            src={attr.imageUrl} 
+                            alt={attr.name} 
+                            category={attr.category} 
+                            destinationName={trip.destinationCity} 
+                          />
                         </div>
+                        <div className="dest-card-content">
+                          <div className="dest-card-header">
+                            <h5 className="dest-card-title">{attr.name}</h5>
+                            <span className="dest-card-category">{attr.category}</span>
+                          </div>
+                          <p className="dest-card-desc">{attr.description || attr.address}</p>
+                          <div className="dest-card-meta-chips">
+                            {attr.distanceKm != null && (
+                              <span className="dest-card-chip dist">
+                                <Navigation size={11} /> {attr.distanceKm} km ({attr.travelTimeMinutes || 15}m)
+                              </span>
+                            )}
+                            <span className="dest-card-chip">
+                              <Clock size={11} /> {attr.durationHours || 1.5} hrs
+                            </span>
+                            <span className="dest-card-chip">
+                              <DollarSign size={11} /> {attr.entryFeeInr > 0 ? `₹${attr.entryFeeInr}` : 'Free Entry'}
+                            </span>
+                            <span className="dest-card-chip">
+                              ⭐ {attr.rating || 4.5}
+                            </span>
+                          </div>
+                        </div>
+                        <button 
+                          type="button"
+                          className="btn-add-dest-place"
+                          onClick={() => handleSelectAlternative(rescheduleTarget.id, {
+                            id: attr.id,
+                            title: attr.name,
+                            category: attr.category,
+                            costInr: attr.entryFeeInr || 0,
+                            durationMinutes: attr.durationMinutes || 90,
+                            indoorOutdoor: attr.indoorOutdoor || 'Outdoor',
+                            latitude: attr.latitude,
+                            longitude: attr.longitude,
+                            rating: attr.rating,
+                            reviewCount: attr.reviewCount,
+                            openingHours: attr.openingHours,
+                            address: attr.address,
+                            recommendationReason: attr.description || 'Selected by user from verified database'
+                          })}
+                        >
+                          Choose Replacement
+                        </button>
                       </div>
-                      <button 
-                        className="btn-choose-alt"
-                        onClick={() => handleSelectAlternative(rescheduleTarget.id, alt)}
-                      >
-                        [Choose This Alternative]
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* ========================================================
+                 MANUAL EDIT TAB (Inside Reschedule Modal)
+                 ======================================================== */
+              <div className="reschedule-manual-edit-panel">
+                {/* SUBSECTION 1: DIRECT ADD PLACE MANUALLY */}
+                <div className="manual-section-card">
+                  <div className="manual-section-header">
+                    <div className="manual-section-title">
+                      <Plus size={18} style={{ color: '#0284c7' }} />
+                      <h4>Add Place Manually</h4>
+                    </div>
+                    <span className="manual-section-badge">Direct Add</span>
+                  </div>
+                  <p className="manual-section-desc">
+                    Type any place name, restaurant, or custom activity to add directly to your itinerary without searching.
+                  </p>
+
+                  <form onSubmit={handleDirectAddPlaceSubmit} className="manual-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">
+                        Place Name <span className="required-star">*</span>
+                      </label>
+                      <LocationAutocomplete 
+                        value={manualForm.placeName}
+                        onChange={(val) => {
+                          const fb = resolveKnownCoords(val);
+                          setManualForm(prev => ({
+                            ...prev,
+                            placeName: val,
+                            latitude: fb ? fb[0] : null,
+                            longitude: fb ? fb[1] : null,
+                            category: (prev.category && prev.category !== 'Sightseeing' && prev.category !== 'Sightseeing & Attractions') ? prev.category : inferCategory(val, prev.address)
+                          }));
+                        }}
+                        onSelect={(item) => {
+                          const chosenName = item.name || item.displayName;
+                          const chosenAddress = item.secondary || item.displayName || '';
+                          const fb = resolveKnownCoords(chosenName) || resolveKnownCoords(chosenAddress);
+                          const chosenLat = item.latitude != null ? item.latitude : (fb ? fb[0] : null);
+                          const chosenLng = item.longitude != null ? item.longitude : (fb ? fb[1] : null);
+                          const chosenCategory = item.category || inferCategory(chosenName, chosenAddress);
+
+                          setManualForm(prev => ({
+                            ...prev,
+                            placeName: chosenName,
+                            address: chosenAddress,
+                            latitude: chosenLat,
+                            longitude: chosenLng,
+                            category: chosenCategory
+                          }));
+                        }}
+                        placeholder="Search location (e.g. Gayatri University, GITAM, Araku) or type custom place..."
+                        required
+                      />
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label className="form-label">Day of Visit</label>
+                        <select 
+                          className="form-select"
+                          value={manualForm.dayId || (trip?.days && trip.days[0]?.id)}
+                          onChange={(e) => {
+                            const selId = Number(e.target.value);
+                            const selDay = trip?.days?.find(d => d.id === selId);
+                            setManualForm(prev => ({ 
+                              ...prev, 
+                              dayId: selId, 
+                              dayNumber: selDay ? selDay.dayNumber : prev.dayNumber 
+                            }));
+                          }}
+                        >
+                          {(trip?.days || []).map(d => (
+                            <option key={d.id} value={d.id}>
+                              Day {d.dayNumber} {d.date ? `(${d.date})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Preferred Visiting Time</label>
+                        <input 
+                          type="time" 
+                          className="form-input"
+                          value={manualForm.startTime}
+                          onChange={(e) => setManualForm(prev => ({ ...prev, startTime: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label className="form-label">Estimated Duration</label>
+                        <select 
+                          className="form-select"
+                          value={manualForm.durationMinutes}
+                          onChange={(e) => setManualForm(prev => ({ ...prev, durationMinutes: Number(e.target.value) }))}
+                        >
+                          <option value={30}>30 minutes</option>
+                          <option value={45}>45 minutes</option>
+                          <option value={60}>1 hour</option>
+                          <option value={90}>1.5 hours (Recommended)</option>
+                          <option value={120}>2 hours</option>
+                          <option value={150}>2.5 hours</option>
+                          <option value={180}>3 hours</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Category</label>
+                        <select 
+                          className="form-select"
+                          value={manualForm.category}
+                          onChange={(e) => setManualForm(prev => ({ ...prev, category: e.target.value }))}
+                        >
+                          <option value="Sightseeing & Attractions">Sightseeing & Attractions</option>
+                          <option value="Education / University">Education / University</option>
+                          <option value="Temples / Spiritual">Temples / Spiritual</option>
+                          <option value="Beaches">Beaches & Coastal</option>
+                          <option value="Historical / Heritage">Historical & Heritage</option>
+                          <option value="Viewpoints / Attractions">Viewpoints & Scenic</option>
+                          <option value="Wildlife / Zoo">Wildlife & Nature</option>
+                          <option value="Museums">Museums & Culture</option>
+                          <option value="Parks & Gardens">Parks & Gardens</option>
+                          <option value="Food & Dining">Food & Dining / Restaurant</option>
+                          <option value="Shopping / Market">Shopping & Local Market</option>
+                          <option value="Nature / Hill Stations">Nature & Hill Stations</option>
+                          <option value="Custom Spot">Custom Spot / Activity</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Address or Location (Optional)</label>
+                      <input 
+                        type="text" 
+                        className="form-input"
+                        placeholder="e.g. Near Calangute Beach Circle, North Goa (Optional)"
+                        value={manualForm.address}
+                        onChange={(e) => setManualForm(prev => ({ ...prev, address: e.target.value }))}
+                      />
+                      <small style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '2px' }}>
+                        Optional. Places without coordinates are saved immediately and integrated into your day.
+                      </small>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Notes (Optional)</label>
+                      <textarea 
+                        className="form-textarea"
+                        placeholder="e.g. Must try local dishes, scenic spot..."
+                        value={manualForm.notes}
+                        onChange={(e) => setManualForm(prev => ({ ...prev, notes: e.target.value }))}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                      <button type="submit" className="btn-add-manual-submit">
+                        <Plus size={16} /> Add to Itinerary
                       </button>
                     </div>
-                  ))}
+                  </form>
                 </div>
-              )}
-            </div>
+
+                {/* SUBSECTION 2: REPLACE TARGET ATTRACTION WITH CUSTOM PLACE */}
+                <div className="manual-section-card" style={{ marginTop: '1.25rem' }}>
+                  <div className="manual-section-header">
+                    <div className="manual-section-title">
+                      <RefreshCw size={18} style={{ color: '#d97706' }} />
+                      <h4>Replace "{rescheduleTarget.title}"</h4>
+                    </div>
+                    <span className="manual-section-badge replace">Direct Replace</span>
+                  </div>
+                  <p className="manual-section-desc">
+                    Replace this specific attraction with your own custom place while preserving the rest of your itinerary.
+                  </p>
+
+                  <form onSubmit={handleReplaceWithManualPlaceSubmit} className="manual-form-grid">
+                    <div className="form-group">
+                      <label className="form-label">
+                        Replacement Place Name <span className="required-star">*</span>
+                      </label>
+                      <LocationAutocomplete 
+                        value={replaceManualForm.placeName}
+                        onChange={(val) => {
+                          const fb = resolveKnownCoords(val);
+                          setReplaceManualForm(prev => ({
+                            ...prev,
+                            placeName: val,
+                            latitude: fb ? fb[0] : null,
+                            longitude: fb ? fb[1] : null,
+                            category: (prev.category && prev.category !== 'Sightseeing' && prev.category !== 'Sightseeing & Attractions') ? prev.category : inferCategory(val, prev.address)
+                          }));
+                        }}
+                        onSelect={(item) => {
+                          const chosenName = item.name || item.displayName;
+                          const chosenAddress = item.secondary || item.displayName || '';
+                          const fb = resolveKnownCoords(chosenName) || resolveKnownCoords(chosenAddress);
+                          const chosenLat = item.latitude != null ? item.latitude : (fb ? fb[0] : null);
+                          const chosenLng = item.longitude != null ? item.longitude : (fb ? fb[1] : null);
+                          const chosenCategory = item.category || inferCategory(chosenName, chosenAddress);
+
+                          setReplaceManualForm(prev => ({
+                            ...prev,
+                            placeName: chosenName,
+                            address: chosenAddress,
+                            latitude: chosenLat,
+                            longitude: chosenLng,
+                            category: chosenCategory
+                          }));
+                        }}
+                        placeholder="Search location (e.g. Gayatri University, GITAM) or type custom place..."
+                        required
+                      />
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label className="form-label">Visiting Time</label>
+                        <input 
+                          type="time" 
+                          className="form-input"
+                          value={replaceManualForm.startTime}
+                          onChange={(e) => setReplaceManualForm(prev => ({ ...prev, startTime: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Estimated Duration</label>
+                        <select 
+                          className="form-select"
+                          value={replaceManualForm.durationMinutes}
+                          onChange={(e) => setReplaceManualForm(prev => ({ ...prev, durationMinutes: Number(e.target.value) }))}
+                        >
+                          <option value={30}>30 minutes</option>
+                          <option value={45}>45 minutes</option>
+                          <option value={60}>1 hour</option>
+                          <option value={90}>1.5 hours</option>
+                          <option value={120}>2 hours</option>
+                          <option value={180}>3 hours</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Category</label>
+                      <select 
+                        className="form-select"
+                        value={replaceManualForm.category}
+                        onChange={(e) => setReplaceManualForm(prev => ({ ...prev, category: e.target.value }))}
+                      >
+                        <option value="Sightseeing & Attractions">Sightseeing & Attractions</option>
+                        <option value="Education / University">Education / University</option>
+                        <option value="Temples / Spiritual">Temples / Spiritual</option>
+                        <option value="Beaches">Beaches & Coastal</option>
+                        <option value="Historical / Heritage">Historical & Heritage</option>
+                        <option value="Viewpoints / Attractions">Viewpoints & Scenic</option>
+                        <option value="Wildlife / Zoo">Wildlife & Nature</option>
+                        <option value="Museums">Museums & Culture</option>
+                        <option value="Parks & Gardens">Parks & Gardens</option>
+                        <option value="Food & Dining">Food & Dining / Restaurant</option>
+                        <option value="Shopping / Market">Shopping & Local Market</option>
+                        <option value="Nature / Hill Stations">Nature & Hill Stations</option>
+                        <option value="Custom Spot">Custom Spot / Activity</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Address or Landmark (Optional)</label>
+                      <input 
+                        type="text" 
+                        className="form-input"
+                        placeholder="e.g. Beach Road, Goa (Optional)"
+                        value={replaceManualForm.address}
+                        onChange={(e) => setReplaceManualForm(prev => ({ ...prev, address: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Notes (Optional)</label>
+                      <input 
+                        type="text" 
+                        className="form-input"
+                        placeholder="e.g. Recommended by local friend"
+                        value={replaceManualForm.notes}
+                        onChange={(e) => setReplaceManualForm(prev => ({ ...prev, notes: e.target.value }))}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                      <button type="submit" className="btn-replace-manual-submit">
+                        <RefreshCw size={15} /> Replace "{rescheduleTarget.title}"
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* SUBSECTION 3: MODIFY ITINERARY PLACES (REORDER, MOVE DAYS, ADJUST TIMES, REMOVE) */}
+                <div className="manual-section-card" style={{ marginTop: '1.25rem' }}>
+                  <div className="manual-section-header">
+                    <div className="manual-section-title">
+                      <Compass size={18} style={{ color: '#2563eb' }} />
+                      <h4>Modify Itinerary Places</h4>
+                    </div>
+                    <span className="manual-section-badge manage">Order & Schedule</span>
+                  </div>
+                  <p className="manual-section-desc">
+                    Change visit order, move places between days, adjust scheduled times, or remove unwanted places.
+                  </p>
+
+                  <div className="manual-manage-days-list">
+                    {(trip?.days || []).map((day) => {
+                      const activeActs = (day.activities || []).filter(a => a.status !== 'CANCELLED' && a.status !== 'REPLACED');
+                      return (
+                        <div key={day.id} className="manual-day-group">
+                          <div className="manual-day-header">
+                            <strong>Day {day.dayNumber} {day.date ? `(${day.date})` : ''}</strong>
+                            <span className="manual-day-count">{activeActs.length} {activeActs.length === 1 ? 'place' : 'places'}</span>
+                          </div>
+
+                          {activeActs.length === 0 ? (
+                            <p className="manual-empty-day">No places scheduled for this day yet.</p>
+                          ) : (
+                            <div className="manual-places-table">
+                              {activeActs.map((act, actIdx) => (
+                                <div key={act.id} className="manual-place-row">
+                                  <div className="manual-place-col-info">
+                                    <span className="manual-place-order-num">{actIdx + 1}</span>
+                                    <div className="manual-place-names">
+                                      <strong>{act.title}</strong>
+                                      <span className="manual-place-sub">
+                                        {act.category} • {act.time || '10:00'} ({act.duration || '90 mins'})
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="manual-place-col-actions">
+                                    {/* Move Up / Down */}
+                                    <div className="manual-order-btns">
+                                      <button 
+                                        type="button" 
+                                        className="btn-mini-order"
+                                        onClick={() => handleMoveActivity(day, act.id, -1)}
+                                        disabled={actIdx === 0}
+                                        title="Move Up (visit earlier)"
+                                      >
+                                        <ChevronUp size={13} />
+                                      </button>
+                                      <button 
+                                        type="button" 
+                                        className="btn-mini-order"
+                                        onClick={() => handleMoveActivity(day, act.id, 1)}
+                                        disabled={actIdx === activeActs.length - 1}
+                                        title="Move Down (visit later)"
+                                      >
+                                        <ChevronDown size={13} />
+                                      </button>
+                                    </div>
+
+                                    {/* Dynamic Day and Position Selection with Save */}
+                                    {(() => {
+                                      const draft = placeEditDrafts[act.id];
+                                      const chosenDayId = draft?.dayId != null ? draft.dayId : day.id;
+                                      const targetDayObj = (trip?.days || []).find(d => Number(d.id) === Number(chosenDayId)) || day;
+                                      const isDiffDay = Number(chosenDayId) !== Number(day.id);
+
+                                      // Available slots in target day
+                                      const targetDayActive = (targetDayObj.activities || []).filter(a => a.status !== 'CANCELLED' && a.status !== 'REPLACED' && a.id !== act.id);
+                                      const totalPositions = isDiffDay ? (targetDayActive.length + 1) : Math.max(1, activeActs.length);
+                                      const chosenPos = draft?.position != null ? draft.position : (actIdx + 1);
+                                      const isDirty = draft?.isDirty || false;
+
+                                      return (
+                                        <>
+                                          {/* Move to another Day */}
+                                          <div className="manual-move-day-wrap" title="Change Day of visit">
+                                            <span className="manual-move-label">Day:</span>
+                                            <select 
+                                              className="manual-mini-select"
+                                              value={chosenDayId}
+                                              onChange={(e) => {
+                                                const nextDayId = Number(e.target.value);
+                                                const nextDayObj = (trip?.days || []).find(d => Number(d.id) === nextDayId) || day;
+                                                const nextActive = (nextDayObj.activities || []).filter(a => a.status !== 'CANCELLED' && a.status !== 'REPLACED' && a.id !== act.id);
+                                                const maxP = Number(nextDayId) !== Number(day.id) ? nextActive.length + 1 : activeActs.length;
+                                                const newPos = Math.max(1, Math.min(maxP, chosenPos));
+                                                const dirty = Number(nextDayId) !== Number(day.id) || newPos !== (actIdx + 1);
+                                                setPlaceEditDrafts(prev => ({
+                                                  ...prev,
+                                                  [act.id]: { dayId: nextDayId, position: newPos, isDirty: dirty }
+                                                }));
+                                              }}
+                                            >
+                                              {(trip?.days || []).map(d => (
+                                                <option key={d.id} value={d.id}>
+                                                  Day {d.dayNumber}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </div>
+
+                                          {/* Position Selection */}
+                                          <div className="manual-move-day-wrap" title="Change Position within Day">
+                                            <span className="manual-move-label">Pos:</span>
+                                            <select 
+                                              className="manual-mini-select"
+                                              value={chosenPos}
+                                              onChange={(e) => {
+                                                const nextPos = Number(e.target.value);
+                                                const dirty = Number(chosenDayId) !== Number(day.id) || nextPos !== (actIdx + 1);
+                                                setPlaceEditDrafts(prev => ({
+                                                  ...prev,
+                                                  [act.id]: { dayId: chosenDayId, position: nextPos, isDirty: dirty }
+                                                }));
+                                              }}
+                                            >
+                                              {Array.from({ length: totalPositions }, (_, pIdx) => (
+                                                <option key={pIdx} value={pIdx + 1}>
+                                                  #{pIdx + 1}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </div>
+
+                                          {/* Save / Cancel Button for Day & Position changes */}
+                                          {isDirty && (
+                                            <div className="manual-timing-edit-box" style={{ margin: 0 }}>
+                                              <button 
+                                                type="button" 
+                                                className="btn-mini-save"
+                                                disabled={isSavingPlaceId === act.id}
+                                                onClick={() => handleSavePlaceChanges(act.id, day.id)}
+                                                title="Save Day & Position changes"
+                                              >
+                                                {isSavingPlaceId === act.id ? 'Saving...' : 'Save'}
+                                              </button>
+                                              <button 
+                                                type="button" 
+                                                className="btn-mini-cancel"
+                                                onClick={() => handleCancelPlaceChanges(act.id)}
+                                                title="Cancel changes"
+                                              >
+                                                ✕
+                                              </button>
+                                            </div>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
+
+                                    {/* Timing Editor Toggle / Form */}
+                                    {editingTimingId === act.id ? (
+                                      <div className="manual-timing-edit-box">
+                                        <input 
+                                          type="time" 
+                                          className="manual-mini-time"
+                                          value={timingForm.startTime}
+                                          onChange={(e) => setTimingForm(prev => ({ ...prev, startTime: e.target.value }))}
+                                        />
+                                        <select 
+                                          className="manual-mini-select"
+                                          value={timingForm.durationMinutes}
+                                          onChange={(e) => setTimingForm(prev => ({ ...prev, durationMinutes: Number(e.target.value) }))}
+                                        >
+                                          <option value={30}>30m</option>
+                                          <option value={45}>45m</option>
+                                          <option value={60}>1h</option>
+                                          <option value={90}>1.5h</option>
+                                          <option value={120}>2h</option>
+                                          <option value={180}>3h</option>
+                                        </select>
+                                        <button 
+                                          type="button" 
+                                          className="btn-mini-save"
+                                          onClick={async () => {
+                                            await handleUpdateActivityTiming(act.id, timingForm.startTime, timingForm.durationMinutes);
+                                            setEditingTimingId(null);
+                                          }}
+                                        >
+                                          Save
+                                        </button>
+                                        <button 
+                                          type="button" 
+                                          className="btn-mini-cancel"
+                                          onClick={() => setEditingTimingId(null)}
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button 
+                                        type="button" 
+                                        className="btn-mini-time-toggle"
+                                        onClick={() => {
+                                          setEditingTimingId(act.id);
+                                          setTimingForm({
+                                            startTime: act.time || '11:00',
+                                            durationMinutes: act.durationMinutes || (act.duration ? parseInt(act.duration, 10) : 90) || 90
+                                          });
+                                        }}
+                                        title="Change visiting time & duration"
+                                      >
+                                        <Clock size={12} /> Time
+                                      </button>
+                                    )}
+
+                                    {/* Remove Place */}
+                                    <button 
+                                      type="button" 
+                                      className="btn-mini-remove"
+                                      onClick={() => handleRemoveActivity(act.id)}
+                                      title="Remove place from itinerary"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="modal-action-buttons">
               <button className="btn-modal-secondary" onClick={() => setShowRescheduleModal(false)}>
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -1985,7 +3014,7 @@ const Itinerary = () => {
                   <UserPlus size={20} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#0f172a' }}>+ Invite Travellers</h3>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#0f172a' }}>{t('itinerary.inviteTravellers')}</h3>
                   <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b' }}>Share trip ID #{trip.id} with friends or family</p>
                 </div>
               </div>
@@ -2026,14 +3055,14 @@ const Itinerary = () => {
 
               <div className="modal-action-buttons" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
                 <button type="button" className="btn-modal-secondary" onClick={() => setShowInviteModal(false)}>
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button 
                   type="submit" 
                   className="btn-modal-primary"
                   disabled={isSendingInvite || !inviteEmail.trim()}
                 >
-                  {isSendingInvite ? 'Sending Invitation...' : '[Send Invitation]'}
+                  {isSendingInvite ? t('modals.sending') : t('modals.sendInvite')}
                 </button>
               </div>
             </form>
@@ -2049,7 +3078,7 @@ const Itinerary = () => {
           <div className="edit-trip-modal glass-panel animate-scale-up" style={{ maxWidth: '720px', width: '100%', background: '#ffffff', borderRadius: '16px', padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="edit-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
               <div>
-                <h2 style={{ margin: 0, fontSize: '1.35rem', color: '#0f172a' }}>Edit Trip: {trip.title || trip.destinationCity}</h2>
+                <h2 style={{ margin: 0, fontSize: '1.35rem', color: '#0f172a' }}>{t('modals.editTitle')}: {trip.title ? formatTripTitle(trip.title, trip.destinationCity) : getDestName(trip.destinationCity)}</h2>
                 <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#64748b' }}>Trip ID #{trip.id} • Modifying preferences will recalculate affected itinerary items</p>
               </div>
               <button className="modal-close-btn" onClick={() => setShowEditTripModal(false)}>✕</button>
@@ -2190,14 +3219,14 @@ const Itinerary = () => {
                 </div>
 
                 <div className="form-group">
-                  <label>Travel Pace / Activity Level</label>
+                  <label>{t('modals.travelPace')}</label>
                   <select 
                     value={editFormData.activityLevel} 
                     onChange={(e) => setEditFormData({ ...editFormData, activityLevel: e.target.value })}
                   >
-                    <option value="Relaxed">Relaxed (Slow Pace)</option>
-                    <option value="Moderate">Moderate</option>
-                    <option value="Fast-paced">Fast-paced (Active)</option>
+                    <option value="Relaxed">{t('plan.paceRelaxed')}</option>
+                    <option value="Moderate">{t('plan.paceModerate')}</option>
+                    <option value="Fast Paced">{t('plan.paceFast')}</option>
                   </select>
                 </div>
 
@@ -2251,7 +3280,7 @@ const Itinerary = () => {
                   onClick={() => setShowEditTripModal(false)}
                   disabled={isSavingEdit}
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button 
                   type="submit" 
@@ -2259,9 +3288,9 @@ const Itinerary = () => {
                   disabled={isSavingEdit}
                 >
                   {isSavingEdit ? (
-                    <span>Recalculating Itinerary...</span>
+                    <span>{t('modals.saving')}</span>
                   ) : (
-                    <span>[Save Changes & Regenerate Plan]</span>
+                    <span>{t('modals.saveChanges')}</span>
                   )}
                 </button>
               </div>

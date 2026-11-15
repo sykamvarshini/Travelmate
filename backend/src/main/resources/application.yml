@@ -22,6 +22,15 @@ spring:
       fail-on-empty-beans: false
 
 app:
+  admin:
+    admin1:
+      email: ${ADMIN1_EMAIL:sykamvarshini30@gmail.com}
+      password: ${ADMIN1_PASSWORD:Admin@TravelMate2026}
+      name: ${ADMIN1_NAME:Varshini Sykam}
+    admin2:
+      email: ${ADMIN2_EMAIL:sindhura11@gmail.com}
+      password: ${ADMIN2_PASSWORD:Admin@TravelMate2026}
+      name: ${ADMIN2_NAME:Sindhura}
   jwt:
     secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
     expiration-ms: 86400000
@@ -36,9 +45,6 @@ app:
       base-url: ${NOMINATIM_BASE_URL:https://nominatim.openstreetmap.org}
     osrm:
       base-url: ${OSRM_BASE_URL:https://router.project-osrm.org}
-    gemini:
-      api-key: ${GEMINI_API_KEY:}
-      model: ${GEMINI_MODEL:gemini-1.5-flash}
   weights:
     preference: 0.40
     weather: 0.25

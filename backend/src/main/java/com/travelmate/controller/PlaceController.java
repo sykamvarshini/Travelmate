@@ -77,4 +77,17 @@ public class PlaceController {
         List<Map<String, Object>> items = placeDiscoveryService.discoverByCategory(destination, category);
         return ResponseEntity.ok(items);
     }
+
+    /**
+     * Search legitimate attractions within a destination for manual place addition and rescheduling.
+     */
+    @GetMapping("/destination-attractions")
+    public ResponseEntity<List<Map<String, Object>>> getDestinationAttractions(
+            @RequestParam("destination") String destination,
+            @RequestParam(value = "query", required = false) String query,
+            @RequestParam(value = "prevLat", required = false) Double prevLat,
+            @RequestParam(value = "prevLon", required = false) Double prevLon) {
+        List<Map<String, Object>> list = placeDiscoveryService.searchDestinationAttractions(destination, query, prevLat, prevLon);
+        return ResponseEntity.ok(list);
+    }
 }

@@ -22,13 +22,16 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final AuthenticationManager authenticationManager;
+    private final AdminActivityLogService adminActivityLogService;
 
     public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder,
-                       JwtTokenProvider jwtTokenProvider, AuthenticationManager authenticationManager) {
+                       JwtTokenProvider jwtTokenProvider, AuthenticationManager authenticationManager,
+                       AdminActivityLogService adminActivityLogService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
         this.authenticationManager = authenticationManager;
+        this.adminActivityLogService = adminActivityLogService;
     }
 
     public AuthResponse register(RegisterRequest request) {
@@ -40,11 +43,9 @@ public class AuthService {
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setFullName(request.getFullName());
-        if (request.getRole() != null && request.getRole().equalsIgnoreCase("ADMIN")) {
-            user.setRole(Role.ROLE_ADMIN);
-        } else {
-            user.setRole(Role.ROLE_USER);
-        }
+        // STRICT SECURITY REQUIREMENT: Public self-registration ALWAYS receives ROLE_USER.
+        // Users can never register themselves as administrators.
+        user.setRole(Role.ROLE_USER);
         user.setAge(request.getAge());
         user.setPhone(request.getPhone());
 
@@ -70,5 +71,41 @@ public class AuthService {
         } else {
             throw new RuntimeException("User not found");
         }
+    }
+
+    public AuthResponse adminLogin(AuthRequest request, String ipAddress) {
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+        );
+
+        String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.getRole() != Role.ROLE_ADMIN) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Access denied: Account is not authorized as an administrator."
+            );
+        }
+
+        String token = jwtTokenProvider.createToken(email, user.getRole().name());
+
+        adminActivityLogService.logActivity(
+                user.getEmail(),
+                "LOGIN",
+                "Administrator logged in successfully",
+                ipAddress
+        );
+
+        return new AuthResponse(token, user.getId(), user.getEmail(), user.getFullName(), user.getRole().name(), user.getAge());
+    }
+
+    public void adminLogout(String email, String ipAddress) {
+        adminActivityLogService.logActivity(
+                email != null ? email : "Administrator",
+                "LOGOUT",
+                "Administrator logged out",
+                ipAddress
+        );
     }
 }

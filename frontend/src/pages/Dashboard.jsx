@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useDestinationTranslation } from '../utils/destinationTranslations';
 import { 
-  Map, Calendar, DollarSign, ArrowRight, Trash2, Edit3, 
-  Users, Check, X, Clock, Sparkles, Navigation, AlertCircle
+  Calendar, DollarSign, ArrowRight, Trash2, Edit3, 
+  Users, Check, X, Sparkles, AlertCircle
 } from 'lucide-react';
 import { tripService } from '../services/api';
 import './Dashboard.css';
@@ -12,6 +14,8 @@ const INTEREST_OPTIONS = [
 ];
 
 const Dashboard = () => {
+  const { t } = useTranslation();
+  const { getDestName, formatTripTitle } = useDestinationTranslation();
   const [trips, setTrips] = useState([]);
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -193,7 +197,7 @@ const Dashboard = () => {
   };
 
   if (loading) {
-    return <div className="dashboard-container"><p>Loading your adventures...</p></div>;
+    return <div className="dashboard-container"><p>{t('common.loading')}</p></div>;
   }
 
   return (
@@ -207,11 +211,11 @@ const Dashboard = () => {
 
       <div className="dashboard-header">
         <div className="header-content">
-          <h1 className="text-gradient">My Trips</h1>
-          <p>Manage, edit, collaborate, and view your AI-generated itineraries.</p>
+          <h1 className="text-gradient">{t('dashboard.title')}</h1>
+          <p>{t('dashboard.subtitle')}</p>
         </div>
         <Link to="/plan" className="primary-btn" style={{textDecoration: 'none'}}>
-          + Plan New Trip
+          + {t('nav.planTrip')}
         </Link>
       </div>
 
@@ -221,7 +225,7 @@ const Dashboard = () => {
           <div className="invitations-card glass-panel">
             <div className="invitations-header">
               <Users size={20} className="icon-blue" />
-              <h3>Trip Invitations ({invitations.length})</h3>
+              <h3>{t('dashboard.pendingInvites')} ({invitations.length})</h3>
             </div>
             <div className="invitations-list">
               {invitations.map(inv => (
@@ -231,8 +235,8 @@ const Dashboard = () => {
                       <strong>{inv.invitedByName || inv.invitedByEmail || 'A traveler'}</strong> invited you to join the trip:
                     </p>
                     <div className="invite-trip-name">
-                      <strong>{inv.tripTitle || `Trip to ${inv.tripDestination}`}</strong>
-                      {inv.tripDestination && <span className="invite-dest">({inv.tripStartingLocation ? `${inv.tripStartingLocation} → ` : ''}{inv.tripDestination})</span>}
+                      <strong>{inv.tripTitle ? formatTripTitle(inv.tripTitle, inv.tripDestination) : formatTripTitle(`Trip to ${inv.tripDestination}`, inv.tripDestination)}</strong>
+                      {inv.tripDestination && <span className="invite-dest">({inv.tripStartingLocation ? `${getDestName(inv.tripStartingLocation)} → ` : ''}{getDestName(inv.tripDestination)})</span>}
                     </div>
                     <div className="invite-meta">
                       {inv.tripStartDate && <span>📅 {inv.tripStartDate} to {inv.tripEndDate}</span>}
@@ -245,13 +249,13 @@ const Dashboard = () => {
                       onClick={() => handleRespondInvitation(inv.id, 'ACCEPT')} 
                       className="btn-accept-invite"
                     >
-                      <Check size={16} /> Accept
+                      <Check size={16} /> {t('dashboard.accept')}
                     </button>
                     <button 
                       onClick={() => handleRespondInvitation(inv.id, 'DECLINE')} 
                       className="btn-decline-invite"
                     >
-                      <X size={16} /> Decline
+                      <X size={16} /> {t('dashboard.decline')}
                     </button>
                   </div>
                 </div>
@@ -265,15 +269,15 @@ const Dashboard = () => {
       <div className="trips-grid">
         {trips.length === 0 ? (
           <div className="empty-state glass-panel">
-            <p>You haven't planned any trips yet.</p>
-            <Link to="/plan" className="primary-btn" style={{marginTop: '15px', display: 'inline-block'}}>Plan a Trip</Link>
+            <p>{t('dashboard.noTrips')}</p>
+            <Link to="/plan" className="primary-btn" style={{marginTop: '15px', display: 'inline-block'}}>{t('dashboard.startPlanningBtn')}</Link>
           </div>
         ) : (
           trips.map(trip => (
             <div key={trip.id} className="trip-card glass-panel hover-lift">
               <div className="trip-card-header">
                 <div>
-                  <h3>{trip.title || `Trip to ${trip.destinationCity}`}</h3>
+                  <h3>{trip.title ? formatTripTitle(trip.title, trip.destinationCity) : formatTripTitle(`Trip to ${trip.destinationCity}`, trip.destinationCity)}</h3>
                   {getRoleBadge(trip)}
                 </div>
                 <span className={`status-badge ${trip.status === 'Generated' || trip.status === 'PLANNED' ? 'active' : ''}`}>
@@ -284,7 +288,7 @@ const Dashboard = () => {
               <div className="trip-card-body">
                 <div className="trip-detail">
                   <Calendar size={16} className="detail-icon" />
-                  <span>{trip.startDate} to {trip.endDate} ({trip.days?.length || trip.numDays || 1} Days)</span>
+                  <span>{trip.startDate} to {trip.endDate} ({trip.days?.length || trip.numDays || 1} {t('dashboard.days', { count: '' }).trim() || 'Days'})</span>
                 </div>
                 <div className="trip-detail">
                   <DollarSign size={16} className="detail-icon" />
@@ -311,7 +315,7 @@ const Dashboard = () => {
                   title="Delete Trip"
                   style={{background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.9rem'}}
                 >
-                  <Trash2 size={16} /> Delete
+                  <Trash2 size={16} /> {t('common.delete')}
                 </button>
 
                 <button 
@@ -320,11 +324,11 @@ const Dashboard = () => {
                   title="Edit trip inputs & preferences"
                   style={{background: 'none', border: 'none', color: '#0284c7', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 600, fontSize: '0.9rem'}}
                 >
-                  <Edit3 size={16} /> Edit
+                  <Edit3 size={16} /> {t('common.edit')}
                 </button>
 
                 <Link to={`/trip/${trip.id}`} className="view-btn text-gradient" style={{textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 600, fontSize: '0.9rem'}}>
-                  View <ArrowRight size={16} />
+                  {t('dashboard.openTrip')} <ArrowRight size={16} />
                 </Link>
               </div>
             </div>
@@ -340,7 +344,7 @@ const Dashboard = () => {
           <div className="edit-trip-modal glass-panel animate-scale-up">
             <div className="edit-modal-header">
               <div>
-                <h2>Edit Trip: {editingTrip.title || editingTrip.destinationCity}</h2>
+                <h2>{t('modals.editTitle')}: {editingTrip.title ? formatTripTitle(editingTrip.title, editingTrip.destinationCity) : getDestName(editingTrip.destinationCity)}</h2>
                 <p className="edit-modal-subtitle">Trip ID #{editingTrip.id} • Modify preferences and recalculate itinerary.</p>
               </div>
               <button className="modal-close-btn" onClick={() => setEditingTrip(null)}>✕</button>
@@ -481,14 +485,14 @@ const Dashboard = () => {
                 </div>
 
                 <div className="form-group">
-                  <label>Travel Pace / Activity Level</label>
+                  <label>{t('modals.travelPace')}</label>
                   <select 
                     value={editFormData.activityLevel} 
                     onChange={(e) => setEditFormData({ ...editFormData, activityLevel: e.target.value })}
                   >
-                    <option value="Relaxed">Relaxed (Slow Pace)</option>
-                    <option value="Moderate">Moderate</option>
-                    <option value="Fast-paced">Fast-paced (Active)</option>
+                    <option value="Relaxed">{t('plan.paceRelaxed')}</option>
+                    <option value="Moderate">{t('plan.paceModerate')}</option>
+                    <option value="Fast Paced">{t('plan.paceFast')}</option>
                   </select>
                 </div>
 
@@ -542,7 +546,7 @@ const Dashboard = () => {
                   onClick={() => setEditingTrip(null)}
                   disabled={isSavingEdit}
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
                 <button 
                   type="submit" 
@@ -550,9 +554,9 @@ const Dashboard = () => {
                   disabled={isSavingEdit}
                 >
                   {isSavingEdit ? (
-                    <span>Recalculating Itinerary...</span>
+                    <span>{t('modals.saving')}</span>
                   ) : (
-                    <span>[Save Changes & Regenerate Plan]</span>
+                    <span>{t('modals.saveChanges')}</span>
                   )}
                 </button>
               </div>

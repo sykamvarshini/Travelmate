@@ -29,8 +29,8 @@ public class ItineraryDay {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
-    @OneToMany(mappedBy = "itineraryDay", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
-    @OrderBy("startTime ASC")
+    @OneToMany(mappedBy = "itineraryDay", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    @OrderBy("itemOrder ASC, startTime ASC")
     private List<ItineraryItem> items = new ArrayList<>();
 
     @OneToMany(mappedBy = "itineraryDay", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)

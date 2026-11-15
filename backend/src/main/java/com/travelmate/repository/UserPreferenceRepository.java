@@ -2,11 +2,12 @@ package com.travelmate.repository;
 
 import com.travelmate.entity.UserPreference;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
 @Repository
 public interface UserPreferenceRepository extends JpaRepository<UserPreference, Long> {
-    Optional<UserPreference> findByUserId(Long userId);
+    Optional<UserPreference> findByUserId(@NonNull Long userId);
 }

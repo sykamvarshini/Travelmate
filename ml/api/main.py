@@ -214,11 +214,21 @@ def get_recommendations(req: RecommendRequest):
                 wiki_res = requests.get(wiki_url, headers=headers, timeout=6).json()
                 wiki_items = wiki_res.get('query', {}).get('geosearch', [])
                 
-                noise = ['mandal', 'district', 'division', 'constituency', 'railway station', 'station', 'airport', 'flyover', 'corporation', 'capital region', 'shed', 'fire', 'junction', 'bus station', 'hospital', 'college', 'university', 'colony', 'bypas']
+                noise = [
+                    'school', 'vidyalaya', 'college', 'university', 'academy', 'campus', 'polytechnic', 'institute', 'shiksha',
+                    'hospital', 'clinic', 'dispensary', 'nursing home', 'medical', 'pharmacy',
+                    'court', 'tees hazari', 'tis hazari', 'patiala house', 'karkardooma', 'tribunal', 'police', 'thana', 'jail',
+                    'lok niwas', 'raj niwas', 'bhavan', 'secretariat', 'collectorate', 'office', 'headquarters',
+                    'colony', 'enclave', 'apartments', 'residency', 'society', 'nagar', 'vihar', 'sector', 'block', 'pocket',
+                    'karol bagh', 'lajpat nagar', 'sarojini nagar', 'pitampura', 'rohini', 'dwarka', 'janakpuri',
+                    'mandal', 'district', 'division', 'constituency', 'railway station', 'station', 'metro station', 'airport',
+                    'flyover', 'bridge', 'corporation', 'capital region', 'shed', 'fire', 'junction', 'bus station', 'bus stop', 'bypas'
+                ]
                 
                 for item in wiki_items:
                     t = item['title']
-                    if any(w in t.lower() for w in noise):
+                    t_low = t.lower()
+                    if any(w in t_low for w in noise):
                         continue
                     if any(r['name'].lower() == t.lower() or r.get('title', '').lower() == t.lower() for r in recommendations):
                         continue
@@ -228,11 +238,11 @@ def get_recommendations(req: RecommendRequest):
                     if not is_nearby(item_lat, item_lon, effective_max_dist):
                         continue
 
-                    cat = "Sightseeing"
+                    # Must match authentic tourist categories
+                    cat = None
                     indoor = "Outdoor"
                     fee = 0.0
-                    t_low = t.lower()
-                    if any(k in t_low for k in ['temple', 'church', 'mosque', 'shrine', 'masjid', 'gudi', 'dargah', 'basilica', 'monastery']):
+                    if any(k in t_low for k in ['temple', 'mandir', 'church', 'mosque', 'shrine', 'masjid', 'gudi', 'dargah', 'basilica', 'monastery', 'ashram']):
                         cat = "Spiritual / Heritage"
                         indoor = "Indoor"
                         fee = 0.0
@@ -240,14 +250,17 @@ def get_recommendations(req: RecommendRequest):
                         cat = "Museum & Art"
                         indoor = "Indoor"
                         fee = 50.0
-                    elif any(k in t_low for k in ['fort', 'palace', 'caves', 'ruins', 'monument', 'stupa', 'mahal']):
+                    elif any(k in t_low for k in ['fort', 'palace', 'caves', 'ruins', 'monument', 'stupa', 'mahal', 'qila', 'baoli', 'stepwell', 'minar']):
                         cat = "Historical Monument"
                         indoor = "Outdoor"
                         fee = 25.0
-                    elif any(k in t_low for k in ['park', 'garden', 'lake', 'falls', 'waterfall', 'beach', 'valley', 'hills', 'zoo', 'sanctuary', 'viewpoint']):
+                    elif any(k in t_low for k in ['park', 'garden', 'lake', 'falls', 'waterfall', 'beach', 'valley', 'hills', 'zoo', 'sanctuary', 'viewpoint', 'safari']):
                         cat = "Nature & Viewpoint"
                         indoor = "Outdoor"
                         fee = 30.0
+
+                    if cat is None:
+                        continue # Reject non-tourist entities
 
                     if req.max_entry_fee is not None and fee > req.max_entry_fee:
                         continue

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useDestinationTranslation } from '../utils/destinationTranslations';
 import { 
-  Search, MapPin, Compass, Sun, Map, ArrowRight, ShieldCheck, 
+  Search, MapPin, Compass, Sun, ArrowRight, ShieldCheck, 
   Camera, History, Mountain, Tent, Trees, Calendar, Users, 
-  DollarSign, Sparkles, Navigation, CloudRain, Clock, CheckCircle2, ChevronRight,
+  DollarSign, Sparkles, Navigation, CheckCircle2, ChevronRight,
   AlertCircle, Loader2
 } from 'lucide-react';
 import { destinations } from '../data/destinations';
@@ -12,9 +14,12 @@ import LocationAutocomplete from '../components/LocationAutocomplete';
 import PlaceDiscoveryCard from '../components/PlaceDiscoveryCard';
 import PlaceMapModal from '../components/PlaceMapModal';
 import SafeImage from '../components/common/SafeImage';
+import HowToUseVideo from '../components/HowToUseVideo';
 import './Home.css';
 
 const Home = () => {
+  const { t } = useTranslation();
+  const { getDestName, getDestState, formatTripTitle } = useDestinationTranslation();
   const navigate = useNavigate();
   const [selectedRegion, setSelectedRegion] = useState('All');
   const [userTrips, setUserTrips] = useState([]);
@@ -130,14 +135,14 @@ const Home = () => {
     : destinations.filter(d => d.region === selectedRegion);
 
   const interestCategories = [
-    { name: "Spiritual & Temples", icon: <ShieldCheck size={24} />, count: "120+ Verified", cat: "Spiritual" },
-    { name: "Royal Forts & Palaces", icon: <History size={24} />, count: "95+ Verified", cat: "Heritage" },
-    { name: "Scenic Mountains", icon: <Mountain size={24} />, count: "80+ Verified", cat: "Mountains" },
-    { name: "Beaches & Coastline", icon: <Sun size={24} />, count: "65+ Verified", cat: "Beaches" },
-    { name: "Wildlife & Jungles", icon: <Camera size={24} />, count: "45+ Verified", cat: "Wildlife" },
-    { name: "Authentic Food Trails", icon: <Compass size={24} />, count: "110+ Verified", cat: "Food" },
-    { name: "Adventure & Rapids", icon: <Tent size={24} />, count: "50+ Verified", cat: "Adventure" },
-    { name: "Flora & Nature Parks", icon: <Trees size={24} />, count: "70+ Verified", cat: "Nature" }
+    { name: t('home.catSpiritual'), icon: <ShieldCheck size={24} />, count: t('home.verifiedCount', { count: "120+" }), cat: "Spiritual" },
+    { name: t('home.catHeritage'), icon: <History size={24} />, count: t('home.verifiedCount', { count: "95+" }), cat: "Heritage" },
+    { name: t('home.catMountains'), icon: <Mountain size={24} />, count: t('home.verifiedCount', { count: "80+" }), cat: "Mountains" },
+    { name: t('home.catBeaches'), icon: <Sun size={24} />, count: t('home.verifiedCount', { count: "65+" }), cat: "Beaches" },
+    { name: t('home.catWildlife'), icon: <Camera size={24} />, count: t('home.verifiedCount', { count: "45+" }), cat: "Wildlife" },
+    { name: t('home.catFood'), icon: <Compass size={24} />, count: t('home.verifiedCount', { count: "110+" }), cat: "Food" },
+    { name: t('home.catAdventure'), icon: <Tent size={24} />, count: t('home.verifiedCount', { count: "50+" }), cat: "Adventure" },
+    { name: t('home.catNature'), icon: <Trees size={24} />, count: t('home.verifiedCount', { count: "70+" }), cat: "Nature" }
   ];
 
   return (
@@ -146,40 +151,39 @@ const Home = () => {
       <section className="hero-section">
         <div className="hero-content">
           <div className="hero-badge">
-            <Sparkles size={16} /> Real India-Wide Place Discovery & Smart Itineraries
+            <Sparkles size={16} /> {t('home.heroBadge')}
           </div>
-          <h1>Design Your Perfect <span className="text-gradient">India Journey</span></h1>
+          <h1>{t('home.heroTitle')} <span className="text-gradient">{t('home.heroTitleHighlight')}</span></h1>
           <p>
-            Explore ANY Indian city, temple, beach, fort, waterfall, or town. 
-            Powered by real location data, verified GPS coordinates, and weather-adaptive scheduling.
+            {t('home.heroSubtitle')}
           </p>
           
           {/* Quick Smart Planner Card with Autocomplete */}
           <div className="hero-planner-card">
             <form onSubmit={handleQuickSearchSubmit} className="hero-planner-form">
               <div className="planner-field">
-                <label><Navigation size={14} /> Origin City</label>
+                <label><Navigation size={14} /> {t('home.originCity')}</label>
                 <input 
                   type="text" 
-                  placeholder="e.g., Delhi, Mumbai, Hyderabad" 
+                  placeholder={t('home.originPlaceholder')} 
                   value={searchForm.origin}
                   onChange={(e) => setSearchForm({...searchForm, origin: e.target.value})}
                 />
               </div>
 
               <div className="planner-field">
-                <label><MapPin size={14} /> Destination (Any Place in India)</label>
+                <label><MapPin size={14} /> {t('home.destination')}</label>
                 <LocationAutocomplete 
                   value={searchForm.destination}
                   onChange={(val) => setSearchForm({...searchForm, destination: val, lat: null, lon: null})}
                   onSelect={handleAutocompleteSelect}
-                  placeholder="e.g. Kanaka Durga Temple, Araku, Gudivada"
+                  placeholder={t('home.destinationPlaceholder')}
                   required
                 />
               </div>
 
               <div className="planner-field">
-                <label><Calendar size={14} /> Start Date</label>
+                <label><Calendar size={14} /> {t('home.startDate')}</label>
                 <input 
                   type="date" 
                   value={searchForm.startDate}
@@ -188,21 +192,21 @@ const Home = () => {
               </div>
 
               <div className="planner-field">
-                <label><Users size={14} /> Style</label>
+                <label><Users size={14} /> {t('home.style')}</label>
                 <select 
                   value={searchForm.travelStyle}
                   onChange={(e) => setSearchForm({...searchForm, travelStyle: e.target.value})}
                 >
-                  <option value="Solo">Solo Traveler</option>
-                  <option value="Couple">Couple</option>
-                  <option value="Family">Family</option>
-                  <option value="Friends">Friends Group</option>
+                  <option value="Solo">{t('home.styleSolo')}</option>
+                  <option value="Couple">{t('home.styleCouple')}</option>
+                  <option value="Family">{t('home.styleFamily')}</option>
+                  <option value="Friends">{t('home.styleFriends')}</option>
                 </select>
               </div>
 
               <div className="planner-button-group">
                 <button type="submit" className="primary-btn planner-btn">
-                  <span>Start Planning</span>
+                  <span>{t('home.startPlanning')}</span>
                   <ArrowRight size={18} />
                 </button>
               </div>
@@ -210,7 +214,7 @@ const Home = () => {
             
             {/* Quick destination chips */}
             <div className="hero-quick-chips">
-              <span className="chips-label">Popular Discovery Searches:</span>
+              <span className="chips-label">{t('home.popularSearches')}</span>
               {[
                 'Kanaka Durga Temple', 'Vijayawada', 'Gudivada', 'Undavalli Caves', 
                 'Araku Valley', 'Tirupati', 'Srikalahasti', 'Charminar', 'Hampi', 'Ooty', 'Munnar', 'RK Beach'
@@ -224,7 +228,7 @@ const Home = () => {
                     handlePerformPlaceSearch(placeName);
                   }}
                 >
-                  {placeName}
+                  {getDestName(placeName)}
                 </button>
               ))}
             </div>
@@ -240,12 +244,12 @@ const Home = () => {
                 {isSearchingPlace ? (
                   <>
                     <Loader2 size={16} className="spin-icon" />
-                    <span>Verifying Real Location...</span>
+                    <span>{t('home.verifyingLocation')}</span>
                   </>
                 ) : (
                   <>
                     <Search size={16} />
-                    <span>Discover Real Place Details & Nearby Attractions</span>
+                    <span>{t('home.discoverDetails')}</span>
                   </>
                 )}
               </button>
@@ -260,8 +264,8 @@ const Home = () => {
           <div className="india-notice-banner">
             <AlertCircle size={24} className="notice-icon" />
             <div className="notice-text">
-              <h3>{indiaScopeNotice}</h3>
-              <p>Explore real destinations across all Indian states and union territories — from hill stations and beaches to sacred temples and historic forts.</p>
+              <h3>{indiaScopeNotice || t('home.indiaScopeTitle')}</h3>
+              <p>{t('home.indiaScopeDesc')}</p>
             </div>
           </div>
         </section>
@@ -271,9 +275,9 @@ const Home = () => {
       {discoveredPlace && (
         <section className="place-discovery-section padding-section">
           <div className="section-header">
-            <div className="header-tag">Live Location Discovery</div>
-            <h2>Real Place Found & Verified</h2>
-            <p>100% verified location, GPS coordinates, real photographs, and nearby attractions.</p>
+            <div className="header-tag">{t('home.liveDiscoveryTag')}</div>
+            <h2>{t('home.liveDiscoveryTitle')}</h2>
+            <p>{t('home.liveDiscoverySub')}</p>
           </div>
 
           <PlaceDiscoveryCard 
@@ -288,23 +292,23 @@ const Home = () => {
       {userTrips.length > 0 && (
         <section className="recent-trips-section padding-section">
           <div className="section-header">
-            <div className="header-tag">Resume Your Adventure</div>
-            <h2>Your Recent Planned Trips</h2>
+            <div className="header-tag">{t('home.recentTripsTag')}</div>
+            <h2>{t('home.recentTripsTitle')}</h2>
           </div>
           <div className="recent-trips-grid">
             {userTrips.map(trip => (
               <div key={trip.id} className="recent-trip-card">
                 <div className="trip-card-header">
-                  <h3>{trip.title || `Trip to ${trip.destinationCity}`}</h3>
+                  <h3>{trip.title ? formatTripTitle(trip.title, trip.destinationCity) : formatTripTitle(`Trip to ${trip.destinationCity}`, trip.destinationCity)}</h3>
                   <span className="trip-status-pill">{trip.status || 'PLANNED'}</span>
                 </div>
                 <div className="trip-meta-row">
-                  <span><MapPin size={14} /> {trip.destinationCity}</span>
+                  <span><MapPin size={14} /> {getDestName(trip.destinationCity)}</span>
                   <span><Calendar size={14} /> {trip.startDate} ({trip.numDays || 1} Days)</span>
                   <span><DollarSign size={14} /> Est. ₹{trip.totalEstimatedCost ? Math.round(trip.totalEstimatedCost) : '0'}</span>
                 </div>
                 <Link to={`/trip/${trip.id}`} className="view-trip-link">
-                  Open & Adapt Itinerary <ArrowRight size={16} />
+                  {t('home.openItinerary')} <ArrowRight size={16} />
                 </Link>
               </div>
             ))}
@@ -316,18 +320,23 @@ const Home = () => {
       <section className="featured-section padding-section">
         <div className="section-header-flex">
           <div>
-            <div className="header-tag">Curated India Showcase</div>
-            <h2>Popular Indian Destinations</h2>
-            <p>100% verified real landmarks, coordinates, and cultural attractions across India.</p>
+            <div className="header-tag">{t('home.curatedTag')}</div>
+            <h2>{t('home.curatedTitle')}</h2>
+            <p>{t('home.curatedSub')}</p>
           </div>
           <div className="region-filter-tabs">
-            {['All', 'South', 'North', 'West'].map(region => (
+            {[
+              { id: 'All', label: t('home.allIndia') },
+              { id: 'South', label: t('home.south') },
+              { id: 'North', label: t('home.north') },
+              { id: 'West', label: t('home.west') }
+            ].map(tab => (
               <button 
-                key={region} 
-                className={`region-tab ${selectedRegion === region ? 'active' : ''}`}
-                onClick={() => setSelectedRegion(region)}
+                key={tab.id} 
+                className={`region-tab ${selectedRegion === tab.id ? 'active' : ''}`}
+                onClick={() => setSelectedRegion(tab.id)}
               >
-                {region === 'All' ? 'All India' : region}
+                {tab.label}
               </button>
             ))}
           </div>
@@ -346,12 +355,12 @@ const Home = () => {
                   loading="lazy" 
                 />
                 <span className="dest-rating-badge">★ {dest.rating}</span>
-                <span className="dest-verified-badge"><CheckCircle2 size={12} /> {dest.verifiedPlacesCount} Spots</span>
+                <span className="dest-verified-badge"><CheckCircle2 size={12} /> {dest.verifiedPlacesCount} {t('home.spots')}</span>
               </div>
               <div className="dest-card-body">
                 <div className="dest-title-row">
-                  <h3>{dest.name}</h3>
-                  <span className="dest-state">{dest.state}</span>
+                  <h3>{getDestName(dest.name)}</h3>
+                  <span className="dest-state">{getDestState(dest.state)}</span>
                 </div>
                 <p>{dest.description}</p>
                 <div className="dest-category-tags">
@@ -360,9 +369,9 @@ const Home = () => {
                   ))}
                 </div>
                 <div className="dest-card-footer">
-                  <span className="best-time">Best: {dest.bestTimeToVisit.split(',')[0]}</span>
+                  <span className="best-time">{t('home.best')}: {dest.bestTimeToVisit.split(',')[0]}</span>
                   <Link to={`/plan?dest=${encodeURIComponent(dest.name)}`} className="plan-dest-btn">
-                    Plan Trip <ChevronRight size={16} />
+                    {t('home.planTripBtn')} <ChevronRight size={16} />
                   </Link>
                 </div>
               </div>
@@ -374,9 +383,9 @@ const Home = () => {
       {/* Explore by Interests */}
       <section className="interests-section padding-section bg-light">
         <div className="section-header">
-          <div className="header-tag">Tailored To Your Passions</div>
-          <h2>Explore India by Interests</h2>
-          <p>Whether you seek high-altitude treks, sacred temples, or royal palaces.</p>
+          <div className="header-tag">{t('home.interestsTag')}</div>
+          <h2>{t('home.interestsTitle')}</h2>
+          <p>{t('home.interestsSub')}</p>
         </div>
         <div className="interests-grid">
           {interestCategories.map((item, idx) => (
@@ -393,33 +402,36 @@ const Home = () => {
         </div>
       </section>
 
+      {/* How to Use TravelMate Interactive Walkthrough Video */}
+      <HowToUseVideo />
+
       {/* How TravelMate AI Works */}
       <section className="how-it-works padding-section">
         <div className="section-header">
-          <div className="header-tag">Intelligent Architecture</div>
-          <h2>How TravelMate AI Plans Your Journey</h2>
-          <p>A true context-aware system powered by machine learning and real-world Indian data.</p>
+          <div className="header-tag">{t('home.howItWorksTag')}</div>
+          <h2>{t('home.howItWorksTitle')}</h2>
+          <p>{t('home.howItWorksSub')}</p>
         </div>
         <div className="workflow-steps-grid">
           <div className="step-card">
             <div className="step-number">01</div>
-            <h3>Traveller Profiling</h3>
-            <p>Collects party size, preferred pace, age groups, culinary tastes, and budget constraints.</p>
+            <h3>{t('home.step1Title')}</h3>
+            <p>{t('home.step1Desc')}</p>
           </div>
           <div className="step-card">
             <div className="step-number">02</div>
-            <h3>Hybrid ML Ranking</h3>
-            <p>Cosine Similarity vectorization and SVD Collaborative Filtering match verified Indian landmarks.</p>
+            <h3>{t('home.step2Title')}</h3>
+            <p>{t('home.step2Desc')}</p>
           </div>
           <div className="step-card">
             <div className="step-number">03</div>
-            <h3>Dynamic Verification</h3>
-            <p>Every stop is verified using OpenStreetMap & Wikipedia Geocodes. No imaginary locations.</p>
+            <h3>{t('home.step3Title')}</h3>
+            <p>{t('home.step3Desc')}</p>
           </div>
           <div className="step-card">
             <div className="step-number">04</div>
-            <h3>Adaptive Re-Routing</h3>
-            <p>Monitors live weather forecasts. If heavy rainfall is predicted, automatically swaps to indoor cultural alternatives.</p>
+            <h3>{t('home.step4Title')}</h3>
+            <p>{t('home.step4Desc')}</p>
           </div>
         </div>
       </section>
@@ -429,15 +441,13 @@ const Home = () => {
         <div className="insight-card-inner">
           <div className="insight-icon"><Sun size={36} className="text-warning" /></div>
           <div className="insight-text">
-            <h3>Live Weather-Aware Travel Intelligence</h3>
+            <h3>{t('home.weatherInsightTitle')}</h3>
             <p>
-              TravelMate AI continuously connects with real-time meteorological models across India. 
-              Visiting coastal Andhra Pradesh, Kerala backwaters, or the Himalayas? 
-              Our engine detects rainfall risks beforehand and adjusts your schedule with 1-click alternatives.
+              {t('home.weatherInsightDesc')}
             </p>
           </div>
           <Link to="/plan" className="primary-btn start-cta-btn">
-            Create AI Itinerary <ArrowRight size={18} />
+            {t('home.createAiItinerary')} <ArrowRight size={18} />
           </Link>
         </div>
       </section>

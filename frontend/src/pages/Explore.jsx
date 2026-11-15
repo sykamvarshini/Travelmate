@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, ArrowRight, Search, Sparkles, Loader2, Map, CheckCircle2, Compass } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useDestinationTranslation } from '../utils/destinationTranslations';
 import { destinations, getAllCategories } from '../data/destinations';
 import { placesService } from '../services/api';
 import LocationAutocomplete from '../components/LocationAutocomplete';
@@ -9,6 +10,7 @@ import SafeImage from '../components/common/SafeImage';
 import './Explore.css';
 
 const Explore = () => {
+  const { getDestName, getDestState } = useDestinationTranslation();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -169,7 +171,7 @@ const Explore = () => {
                 <div className="explore-card-header">
                   <h3>{spot.name || spot.title}</h3>
                   <span className="state-badge">
-                    <MapPin size={12}/> {targetDestination}, India
+                    <MapPin size={12}/> {getDestName(targetDestination)}, India
                   </span>
                 </div>
                 
@@ -228,8 +230,8 @@ const Explore = () => {
               
               <div className="explore-card-content">
                 <div className="explore-card-header">
-                  <h3>{dest.name}</h3>
-                  <span className="state-badge"><MapPin size={12}/> {dest.state}</span>
+                  <h3>{getDestName(dest.name)}</h3>
+                  <span className="state-badge"><MapPin size={12}/> {getDestState(dest.state)}</span>
                 </div>
                 
                 <p className="explore-description">{dest.description}</p>

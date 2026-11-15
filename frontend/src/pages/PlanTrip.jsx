@@ -1,15 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   MapPin, Calendar, DollarSign, Activity, Users, Send, Utensils, 
   Car, Info, Map, Sparkles, CheckCircle2, AlertCircle, Heart,
-  Compass, Mountain, Trees, Sun, History, ShieldCheck, ArrowRight, Loader2, Clock
+  Compass, Mountain, Trees, Sun, History, ShieldCheck, Loader2, Clock
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useDestinationTranslation } from '../utils/destinationTranslations';
 import { tripService } from '../services/api';
 import LocationAutocomplete from '../components/LocationAutocomplete';
 import './PlanTrip.css';
 
 const PlanTrip = () => {
+  const { t } = useTranslation();
+  const { getDestName } = useDestinationTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
@@ -51,16 +55,16 @@ const PlanTrip = () => {
 
   // Quick Interest tags
   const interestOptions = [
-    { label: "Spiritual & Temples", icon: <ShieldCheck size={14} /> },
-    { label: "Heritage & Forts", icon: <History size={14} /> },
-    { label: "Scenic Viewpoints", icon: <Mountain size={14} /> },
-    { label: "Beaches & Coastal", icon: <Sun size={14} /> },
-    { label: "Authentic Food Trails", icon: <Utensils size={14} /> },
-    { label: "Museums & Art", icon: <Compass size={14} /> },
-    { label: "Nature & Parks", icon: <Trees size={14} /> },
-    { label: "Adventure", icon: <Activity size={14} /> },
-    { label: "Shopping & Handlooms", icon: <Heart size={14} /> },
-    { label: "Entertainment", icon: <Sparkles size={14} /> }
+    { key: "Spiritual & Temples", label: t('home.catSpiritual'), icon: <ShieldCheck size={14} /> },
+    { key: "Heritage & Forts", label: t('home.catHeritage'), icon: <History size={14} /> },
+    { key: "Scenic Viewpoints", label: t('home.catMountains'), icon: <Mountain size={14} /> },
+    { key: "Beaches & Coastal", label: t('home.catBeaches'), icon: <Sun size={14} /> },
+    { key: "Authentic Food Trails", label: t('home.catFood'), icon: <Utensils size={14} /> },
+    { key: "Museums & Art", label: "Museums & Art", icon: <Compass size={14} /> },
+    { key: "Nature & Parks", label: t('home.catNature'), icon: <Trees size={14} /> },
+    { key: "Adventure", label: t('home.catAdventure'), icon: <Activity size={14} /> },
+    { key: "Shopping & Handlooms", label: "Shopping & Handlooms", icon: <Heart size={14} /> },
+    { key: "Entertainment", label: "Entertainment", icon: <Sparkles size={14} /> }
   ];
 
   // Quick City Suggestions
@@ -123,7 +127,7 @@ const PlanTrip = () => {
     // Check authentication
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) {
-      setErrorMessage('Please sign in or register to save your trip and generate an AI itinerary.');
+      setErrorMessage(t('plan.errSignIn'));
       return;
     }
 
@@ -136,12 +140,12 @@ const PlanTrip = () => {
     ];
     const destLow = formData.destinationCity.trim().toLowerCase();
     if (foreignCities.some(fc => destLow === fc || destLow.startsWith(fc + " ") || destLow.startsWith(fc + ","))) {
-      setErrorMessage("TravelMate AI currently supports travel within India.");
+      setErrorMessage(t('plan.errIndia'));
       return;
     }
 
     if (formData.planType === 'days' && formData.endDate && new Date(formData.endDate) < new Date(formData.startDate)) {
-      setErrorMessage('End date cannot be earlier than start date.');
+      setErrorMessage(t('plan.errDates'));
       return;
     }
 
@@ -223,8 +227,8 @@ const PlanTrip = () => {
         <div className="header-pill">
           <Sparkles size={16} /> Intelligent Journey Architect
         </div>
-        <h1>Design Your <span className="text-gradient">India Journey</span></h1>
-        <p>Tell our AI about your preferences and let it craft a structured, weather-adaptive itinerary.</p>
+        <h1>{t('plan.pageTitle')}</h1>
+        <p>{t('plan.pageSubtitle')}</p>
       </div>
 
       {errorMessage && (
@@ -241,21 +245,21 @@ const PlanTrip = () => {
             <div className="modal-spinner">
               <Loader2 size={44} className="spin-icon" />
             </div>
-            <h3>TravelMate AI is Planning Your Trip</h3>
-            <p className="destination-target">Destination: <strong>{formData.destinationCity}</strong></p>
+            <h3>{t('plan.modalTitle')}</h3>
+            <p className="destination-target">{t('plan.targetDest', { city: getDestName(formData.destinationCity) })}</p>
             
             <div className="steps-progress-list">
               <div className={`step-item ${submissionStep >= 1 ? 'completed' : ''}`}>
-                <CheckCircle2 size={16} /> Verifying real-world location & coordinates...
+                <CheckCircle2 size={16} /> {t('plan.stepVerifying')}
               </div>
               <div className={`step-item ${submissionStep >= 2 ? 'completed' : ''}`}>
-                <CheckCircle2 size={16} /> Running Hybrid ML ranking & peer similarity...
+                <CheckCircle2 size={16} /> {t('plan.stepRanking')}
               </div>
               <div className={`step-item ${submissionStep >= 3 ? 'completed' : ''}`}>
-                <CheckCircle2 size={16} /> Connecting live 7-day meteorological forecast...
+                <CheckCircle2 size={16} /> {t('plan.stepWeather')}
               </div>
               <div className={`step-item ${submissionStep >= 4 ? 'completed' : ''}`}>
-                <CheckCircle2 size={16} /> Structuring daily timeline & interactive route...
+                <CheckCircle2 size={16} /> {t('plan.stepStructuring')}
               </div>
             </div>
           </div>
@@ -268,7 +272,7 @@ const PlanTrip = () => {
           {/* SECTION 1: DESTINATION & ROUTE */}
           <div className="form-section">
             <h3 className="section-title">
-              <span className="step-badge">1</span> Where & When Are You Travelling?
+              <span className="step-badge">1</span> {t('plan.step1')}
             </h3>
 
             {/* Plan Mode Toggle */}
@@ -278,29 +282,29 @@ const PlanTrip = () => {
                 className={`mode-btn ${formData.planType === 'days' ? 'active' : ''}`}
                 onClick={() => setFormData(prev => ({ ...prev, planType: 'days' }))}
               >
-                <Calendar size={15} /> Multi-Day / Full Days
+                <Calendar size={15} /> {t('plan.modeMultiDay')}
               </button>
               <button 
                 type="button" 
                 className={`mode-btn ${formData.planType === 'hours' ? 'active' : ''}`}
                 onClick={() => setFormData(prev => ({ ...prev, planType: 'hours' }))}
               >
-                <Clock size={15} /> Short Trip (30m – 6 Hours)
+                <Clock size={15} /> {t('plan.modeShortTrip')}
               </button>
             </div>
             
             <div className="form-grid">
               <div className="input-group">
-                <label><MapPin size={16} className="input-icon" /> Starting Location (Origin in India)</label>
+                <label><MapPin size={16} className="input-icon" /> {t('plan.originLabel')}</label>
                 <LocationAutocomplete 
                   value={formData.startingLocation}
                   onChange={(val) => setFormData(prev => ({ ...prev, startingLocation: val }))}
                   onSelect={(item) => setFormData(prev => ({ ...prev, startingLocation: item.name }))}
-                  placeholder="e.g., Delhi, Mumbai, Bengaluru, Hyderabad, Kukatpally"
+                  placeholder={t('plan.originPlaceholder')}
                   required
                 />
                 <div className="quick-select-row">
-                  <span className="mini-label">Quick select:</span>
+                  <span className="mini-label">{t('plan.quickSelect')}</span>
                   {popularOrigins.slice(0, 5).map(city => (
                     <button 
                       key={city} 
@@ -308,23 +312,23 @@ const PlanTrip = () => {
                       className="mini-chip-btn"
                       onClick={() => setFormData(prev => ({ ...prev, startingLocation: city }))}
                     >
-                      {city}
+                      {getDestName(city)}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className="input-group">
-                <label><Map size={16} className="input-icon" /> Destination City or Major Region</label>
+                <label><Map size={16} className="input-icon" /> {t('plan.destLabel')}</label>
                 <LocationAutocomplete 
                   value={formData.destinationCity}
                   onChange={(val) => setFormData(prev => ({ ...prev, destinationCity: val }))}
                   onSelect={(item) => setFormData(prev => ({ ...prev, destinationCity: item.name }))}
-                  placeholder="e.g. Hyderabad, Visakhapatnam, Vijayawada, Chennai"
+                  placeholder={t('plan.destPlaceholder')}
                   required
                 />
                 <div className="quick-select-row">
-                  <span className="mini-label">Popular:</span>
+                  <span className="mini-label">{t('plan.popular')}</span>
                   {popularDestinations.slice(0, 5).map(city => (
                     <button 
                       key={city} 
@@ -332,23 +336,23 @@ const PlanTrip = () => {
                       className="mini-chip-btn"
                       onClick={() => setFormData(prev => ({ ...prev, destinationCity: city }))}
                     >
-                      {city}
+                      {getDestName(city)}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div className="input-group full-width">
-                <label><Compass size={16} className="input-icon" /> Specific Area / Locality (Local Level Exploration)</label>
+                <label><Compass size={16} className="input-icon" /> {t('plan.localityLabel')}</label>
                 <input 
                   type="text"
                   name="locality"
                   value={formData.locality}
                   onChange={handleChange}
-                  placeholder="e.g., Kukatpally, Banjara Hills, MVP Colony, T Nagar, Indiranagar"
+                  placeholder={t('plan.localityPlaceholder')}
                 />
                 <div className="quick-select-row">
-                  <span className="mini-label">Direct Area Exploration:</span>
+                  <span className="mini-label">{t('plan.directArea')}</span>
                   {popularLocalities.map(loc => (
                     <button 
                       key={loc.label} 
@@ -361,7 +365,7 @@ const PlanTrip = () => {
                         startingLocation: prev.startingLocation || loc.area
                       }))}
                     >
-                      {loc.label}
+                      {getDestName(loc.city)} → {loc.area}
                     </button>
                   ))}
                 </div>
@@ -370,7 +374,7 @@ const PlanTrip = () => {
               {formData.planType === 'days' ? (
                 <>
                   <div className="input-group">
-                    <label><Calendar size={16} className="input-icon" /> Start Date</label>
+                    <label><Calendar size={16} className="input-icon" /> {t('plan.startDate')}</label>
                     <input 
                       type="date" 
                       name="startDate" 
@@ -381,7 +385,7 @@ const PlanTrip = () => {
                   </div>
                   
                   <div className="input-group">
-                    <label><Calendar size={16} className="input-icon" /> End Date ({getDurationDays()} Days)</label>
+                    <label><Calendar size={16} className="input-icon" /> {t('plan.endDate')} ({getDurationDays()} {t('dashboard.days', { count: '' }).trim() || 'Days'})</label>
                     <input 
                       type="date" 
                       name="endDate" 
@@ -394,7 +398,7 @@ const PlanTrip = () => {
               ) : (
                 <>
                   <div className="input-group">
-                    <label><Clock size={16} className="input-icon" /> Trip Duration</label>
+                    <label><Clock size={16} className="input-icon" /> {t('plan.shortTripDuration')}</label>
                     <select 
                       name="durationHours" 
                       value={formData.durationHours} 
@@ -411,7 +415,7 @@ const PlanTrip = () => {
                   </div>
 
                   <div className="input-group">
-                    <label><Calendar size={16} className="input-icon" /> Trip Date</label>
+                    <label><Calendar size={16} className="input-icon" /> {t('plan.startDate')}</label>
                     <input 
                       type="date" 
                       name="startDate" 
@@ -422,7 +426,7 @@ const PlanTrip = () => {
                   </div>
 
                   <div className="input-group">
-                    <label><Clock size={16} className="input-icon" /> Start Time</label>
+                    <label><Clock size={16} className="input-icon" /> {t('plan.preferredTime')}</label>
                     <input 
                       type="time" 
                       name="startTime" 
@@ -450,12 +454,12 @@ const PlanTrip = () => {
           {/* SECTION 2: TRAVELLER PROFILE */}
           <div className="form-section">
             <h3 className="section-title">
-              <span className="step-badge">2</span> Traveller Profile & Party
+              <span className="step-badge">2</span> {t('plan.step2')}
             </h3>
             
             <div className="form-grid">
               <div className="input-group">
-                <label><Users size={16} className="input-icon" /> Number of Travelers</label>
+                <label><Users size={16} className="input-icon" /> {t('plan.numTravelers')}</label>
                 <input 
                   type="number" 
                   name="numTravelers" 
@@ -467,17 +471,17 @@ const PlanTrip = () => {
               </div>
 
               <div className="input-group">
-                <label>Travel Party Style</label>
+                <label>{t('plan.partyStyle')}</label>
                 <select name="travelStyle" value={formData.travelStyle} onChange={handleChange}>
-                  <option value="Solo">Solo Traveler</option>
-                  <option value="Couple">Couple / Romantic</option>
-                  <option value="Family">Family with Children</option>
-                  <option value="Friends">Friends Group</option>
+                  <option value="Solo">{t('home.styleSolo')}</option>
+                  <option value="Couple">{t('home.styleCouple')}</option>
+                  <option value="Family">{t('home.styleFamily')}</option>
+                  <option value="Friends">{t('home.styleFriends')}</option>
                 </select>
               </div>
 
               <div className="input-group">
-                <label>Age Group</label>
+                <label>{t('plan.ageGroup')}</label>
                 <select name="ageGroup" value={formData.ageGroup} onChange={handleChange}>
                   <option value="Young Adults (18-25)">Young Adults (18-25)</option>
                   <option value="Adults (26-40)">Adults (26-40)</option>
@@ -488,7 +492,7 @@ const PlanTrip = () => {
               </div>
 
               <div className="input-group">
-                <label><DollarSign size={16} className="input-icon" /> Total Budget (INR)</label>
+                <label><DollarSign size={16} className="input-icon" /> {t('plan.budgetInr')}</label>
                 <input 
                   type="number" 
                   name="budgetInr" 
@@ -498,7 +502,7 @@ const PlanTrip = () => {
                   onChange={handleChange} 
                 />
                 <div className="quick-select-row">
-                  <span className="mini-label">Presets:</span>
+                  <span className="mini-label">{t('plan.presets')}</span>
                   {[15000, 30000, 50000, 80000].map(amt => (
                     <button 
                       key={amt} 
@@ -517,20 +521,20 @@ const PlanTrip = () => {
           {/* SECTION 3: PREFERENCES & PACE */}
           <div className="form-section">
             <h3 className="section-title">
-              <span className="step-badge">3</span> Interests, Pace & Preferences
+              <span className="step-badge">3</span> {t('plan.step3')}
             </h3>
 
             <div className="input-group full-width">
-              <label>What are your primary travel interests? (Select all that apply)</label>
+              <label>{t('plan.interestsTitle')}</label>
               <div className="interest-chips-container">
                 {interestOptions.map(opt => {
-                  const isSelected = formData.interests.includes(opt.label);
+                  const isSelected = formData.interests.includes(opt.key);
                   return (
                     <button 
-                      key={opt.label}
+                      key={opt.key}
                       type="button"
                       className={`interest-tag-btn ${isSelected ? 'selected' : ''}`}
-                      onClick={() => toggleInterest(opt.label)}
+                      onClick={() => toggleInterest(opt.key)}
                     >
                       {opt.icon}
                       <span>{opt.label}</span>
@@ -541,11 +545,11 @@ const PlanTrip = () => {
             </div>
 
             <div className="input-group full-width">
-              <label>Additional Specific Interests (Optional)</label>
+              <label>{t('plan.customInterests')}</label>
               <input 
                 type="text" 
                 name="customInterests" 
-                placeholder="e.g., Photography, Local handicraft shopping, Waterfalls, Coffee tasting" 
+                placeholder={t('plan.customInterestsPlaceholder')} 
                 value={formData.customInterests} 
                 onChange={handleChange} 
               />
@@ -553,7 +557,7 @@ const PlanTrip = () => {
 
             <div className="form-grid">
               <div className="input-group">
-                <label><Compass size={16} className="input-icon" /> How Far Do You Want To Travel? (Distance Range)</label>
+                <label><Compass size={16} className="input-icon" /> {t('plan.travelRange')}</label>
                 <select 
                   name="travelRange" 
                   value={formData.travelRange} 
@@ -568,73 +572,73 @@ const PlanTrip = () => {
                     handleDistanceRangeChange(val, km);
                   }}
                 >
-                  <option value="Very Close (0–2 km)">Very Close (0–2 km • Local Walking / Auto)</option>
-                  <option value="Nearby (2–5 km)">Nearby (2–5 km • Short Local Commute)</option>
-                  <option value="Moderate (5–10 km)">Moderate (5–10 km • City Suburb Range)</option>
-                  <option value="Farther (10–25 km)">Farther (10–25 km • Extended City Exploration)</option>
-                  <option value="Any Distance">Any Distance (No Radius Restriction)</option>
+                  <option value="Very Close (0–2 km)">{t('plan.rangeVeryClose')}</option>
+                  <option value="Nearby (2–5 km)">{t('plan.rangeNearby')}</option>
+                  <option value="Moderate (5–10 km)">{t('plan.rangeModerate')}</option>
+                  <option value="Farther (10–25 km)">{t('plan.rangeFarther')}</option>
+                  <option value="Any Distance">{t('plan.rangeAny')}</option>
                 </select>
               </div>
 
               <div className="input-group">
-                <label><DollarSign size={16} className="input-icon" /> Max Attraction Entry Fee Filter</label>
+                <label><DollarSign size={16} className="input-icon" /> {t('plan.entryFee')}</label>
                 <select 
                   name="maxEntryFee" 
                   value={formData.maxEntryFee} 
                   onChange={handleChange}
                 >
-                  <option value="">Any Ticket Price (No Filter)</option>
-                  <option value="0">Free Entry Only (₹0)</option>
-                  <option value="50">Under ₹50 (₹1–₹50)</option>
-                  <option value="100">Under ₹100 (₹50–₹100)</option>
-                  <option value="200">Under ₹200 (₹100–₹200)</option>
-                  <option value="500">Under ₹500 (₹200–₹500)</option>
+                  <option value="">{t('plan.feeAny')}</option>
+                  <option value="0">{t('plan.feeFree')}</option>
+                  <option value="50">{t('plan.feeUnder50')}</option>
+                  <option value="100">{t('plan.feeUnder100')}</option>
+                  <option value="200">{t('plan.feeUnder200')}</option>
+                  <option value="500">{t('plan.feeUnder500')}</option>
                 </select>
               </div>
 
               <div className="input-group">
-                <label><Car size={16} className="input-icon" /> Travel Distance Preference</label>
+                <label><Car size={16} className="input-icon" /> {t('plan.distancePref')}</label>
                 <select 
                   name="travelDistancePref" 
                   value={formData.travelDistancePref} 
                   onChange={handleChange}
                 >
-                  <option value="Minimal travel">Minimal travel (Keep to immediate surroundings)</option>
-                  <option value="Nearby places only">Nearby places only (Within local neighbourhood)</option>
-                  <option value="Moderate travel">Moderate travel (Balanced local commute)</option>
-                  <option value="Explore farther">Explore farther (Discover perimeter & scenic attractions)</option>
+                  <option value="Minimal travel">{t('plan.distMinimal')}</option>
+                  <option value="Nearby places only">{t('plan.distNearby')}</option>
+                  <option value="Moderate travel">{t('plan.distModerate')}</option>
+                  <option value="Explore farther">{t('plan.distFarther')}</option>
                 </select>
               </div>
 
               <div className="input-group">
-                <label><Activity size={16} className="input-icon" /> Preferred Pace</label>
+                <label><Activity size={16} className="input-icon" /> {t('plan.pace')}</label>
                 <select name="activityLevel" value={formData.activityLevel} onChange={handleChange}>
-                  <option value="Relaxed">Relaxed (1-2 places/day • Unhurried)</option>
-                  <option value="Moderate">Moderate (3-4 places/day • Balanced)</option>
-                  <option value="Packed">Fast-Paced (5+ places/day • Action packed)</option>
+                  <option value="Relaxed">{t('plan.paceRelaxed')}</option>
+                  <option value="Moderate">{t('plan.paceModerate')}</option>
+                  <option value="Fast Paced">{t('plan.paceFast')}</option>
                 </select>
               </div>
 
               <div className="input-group">
-                <label><Utensils size={16} className="input-icon" /> Culinary / Food Preference</label>
+                <label><Utensils size={16} className="input-icon" /> {t('plan.foodPref')}</label>
                 <select name="foodPreference" value={formData.foodPreference} onChange={handleChange}>
-                  <option value="Any">Any Local Cuisine</option>
-                  <option value="Vegetarian">Pure Vegetarian</option>
+                  <option value="Any">{t('plan.foodAny')}</option>
+                  <option value="Vegetarian">{t('plan.foodVeg')}</option>
                   <option value="Non-Vegetarian">Non-Vegetarian / Seafood</option>
-                  <option value="South Indian">Traditional South Indian</option>
-                  <option value="North Indian">North Indian Delicacies</option>
+                  <option value="South Indian">{t('plan.foodSouth')}</option>
+                  <option value="North Indian">{t('plan.foodNorth')}</option>
                   <option value="Street Food">Local Street Food Trails</option>
                   <option value="Vegan">Vegan</option>
                 </select>
               </div>
 
               <div className="input-group">
-                <label><Car size={16} className="input-icon" /> Transportation Preference</label>
+                <label><Car size={16} className="input-icon" /> {t('plan.transitPref')}</label>
                 <select name="transitPreference" value={formData.transitPreference} onChange={handleChange}>
-                  <option value="Flight">Flight (Fastest / Air Travel)</option>
-                  <option value="Train">Train (Indian Railways Express)</option>
-                  <option value="Bus">Bus (Intercity State RTC / Volvo)</option>
-                  <option value="Private Cab">Private Cab / Taxi (Most convenient)</option>
+                  <option value="Flight">{t('plan.transitFlight')}</option>
+                  <option value="Train">{t('plan.transitTrain')}</option>
+                  <option value="Bus">{t('plan.transitBus')}</option>
+                  <option value="Private Cab">{t('plan.transitCab')}</option>
                   <option value="Self-Drive Rental">Self-Drive Rental Car / Bike</option>
                   <option value="Auto Rickshaw / Walking">Auto Rickshaw & Walking Strolls</option>
                 </select>
@@ -666,7 +670,7 @@ const PlanTrip = () => {
               disabled={isSubmitting}
             >
               <Send size={18} />
-              <span>{isSubmitting ? 'Generating Itinerary...' : 'Generate AI Itinerary'}</span>
+              <span>{isSubmitting ? 'Generating Itinerary...' : t('plan.generateTripBtn')}</span>
             </button>
           </div>
         </form>

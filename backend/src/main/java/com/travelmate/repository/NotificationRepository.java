@@ -2,12 +2,13 @@ package com.travelmate.repository;
 
 import com.travelmate.entity.Notification;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
-    List<Notification> findByUserIdOrderByCreatedAtDesc(Long userId);
-    List<Notification> findByTripIdOrderByCreatedAtDesc(Long tripId);
+    List<Notification> findByUserIdOrderByCreatedAtDesc(@NonNull Long userId);
+    List<Notification> findByTripIdOrderByCreatedAtDesc(@NonNull Long tripId);
 }

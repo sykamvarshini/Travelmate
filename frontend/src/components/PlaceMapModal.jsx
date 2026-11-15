@@ -3,6 +3,7 @@ import { X, MapPin, Navigation, ExternalLink } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { useDestinationTranslation } from '../utils/destinationTranslations';
 import './PlaceMapModal.css';
 
 // Fix Leaflet marker icon
@@ -22,6 +23,7 @@ const customPin = L.divIcon({
 });
 
 const PlaceMapModal = ({ place, onClose, onPlanTrip }) => {
+  const { getDestName, getDestState } = useDestinationTranslation();
   if (!place || !place.lat || !place.lon) return null;
 
   const lat = parseFloat(place.lat);
@@ -36,7 +38,7 @@ const PlaceMapModal = ({ place, onClose, onPlanTrip }) => {
             <span className="modal-badge"><MapPin size={14} /> Real Indian Coordinates</span>
             <h3>{place.name}</h3>
             <p className="modal-sub">
-              {place.city ? `${place.city}, ` : ''}{place.state || 'India'} • {lat.toFixed(4)}° N, {lon.toFixed(4)}° E
+              {place.city ? `${getDestName(place.city)}, ` : ''}{getDestState(place.state) || 'India'} • {lat.toFixed(4)}° N, {lon.toFixed(4)}° E
             </p>
           </div>
           <button className="close-btn" onClick={onClose} aria-label="Close">

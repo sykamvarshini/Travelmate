@@ -1,7 +1,12 @@
 package com.travelmate.service;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -24,29 +29,34 @@ public class LocationService {
     /**
      * Searches for a location in India using Nominatim API.
      */
+    @Nullable
     public Map<String, Object> verifyAndGetLocation(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            return null;
+        }
+
         String url = UriComponentsBuilder.fromHttpUrl(nominatimBaseUrl + "/search")
-                .queryParam("q", query)
+                .queryParam("q", query.trim())
                 .queryParam("format", "json")
                 .queryParam("countrycodes", "in")
                 .queryParam("limit", "1")
                 .toUriString();
 
         try {
-            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            HttpHeaders headers = new HttpHeaders();
             headers.set("User-Agent", "TravelMateAI/1.0");
-            org.springframework.http.HttpEntity<String> entity = new org.springframework.http.HttpEntity<>(headers);
+            HttpEntity<String> entity = new HttpEntity<>(headers);
 
-            org.springframework.http.ResponseEntity<List> responseEntity = restTemplate.exchange(
+            ResponseEntity<List<Map<String, Object>>> responseEntity = restTemplate.exchange(
                     url,
-                    org.springframework.http.HttpMethod.GET,
+                    HttpMethod.GET,
                     entity,
-                    List.class
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
             );
             
-            List<Map> response = responseEntity.getBody();
+            List<Map<String, Object>> response = responseEntity.getBody();
             if (response != null && !response.isEmpty()) {
-                return (Map<String, Object>) response.get(0);
+                return response.get(0);
             }
         } catch (Exception e) {
             System.err.println("Error calling Nominatim API: " + e.getMessage());

@@ -4,9 +4,11 @@ import {
   ArrowRight, Compass, ShieldCheck, ExternalLink, Sparkles 
 } from 'lucide-react';
 import SafeImage from './common/SafeImage';
+import { useDestinationTranslation } from '../utils/destinationTranslations';
 import './PlaceDiscoveryCard.css';
 
 const PlaceDiscoveryCard = ({ place, onPlanTrip, onLocateOnMap }) => {
+  const { getDestName, getDestState } = useDestinationTranslation();
   if (!place) return null;
 
   const lat = place.lat ? parseFloat(place.lat).toFixed(4) : null;
@@ -37,7 +39,7 @@ const PlaceDiscoveryCard = ({ place, onPlanTrip, onLocateOnMap }) => {
           <div className="discovery-header-row">
             <div>
               <div className="location-sub-pill">
-                <MapPin size={13} /> {place.city ? `${place.city}, ` : ''}{place.state || 'India'}
+                <MapPin size={13} /> {place.city ? `${getDestName(place.city)}, ` : ''}{getDestState(place.state) || 'India'}
               </div>
               <h2 className="place-title">{place.name}</h2>
             </div>

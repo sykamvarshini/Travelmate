@@ -131,4 +131,17 @@ public class ItineraryItem {
 
     public Double getAiMatchScore() { return aiMatchScore; }
     public void setAiMatchScore(Double aiMatchScore) { this.aiMatchScore = aiMatchScore; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ItineraryItem that = (ItineraryItem) o;
+        return id != null && id.equals(that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return id != null ? id.hashCode() : super.hashCode();
+    }
 }

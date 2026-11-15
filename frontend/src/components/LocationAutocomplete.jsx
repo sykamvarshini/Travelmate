@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Search, Loader2 } from 'lucide-react';
 import { placesService } from '../services/api';
+import { useDestinationTranslation } from '../utils/destinationTranslations';
 import './LocationAutocomplete.css';
 
 const LocationAutocomplete = ({
@@ -12,6 +13,7 @@ const LocationAutocomplete = ({
   autoFocus = false,
   required = false
 }) => {
+  const { getDestName } = useDestinationTranslation();
   const [suggestions, setSuggestions] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -98,8 +100,13 @@ const LocationAutocomplete = ({
                 <MapPin size={16} />
               </div>
               <div className="autocomplete-item-text">
-                <span className="item-name">{item.name}</span>
-                <span className="item-secondary">{item.secondary || item.displayName}</span>
+                <span className="item-name">
+                  {getDestName(item.name)}
+                </span>
+                <span className="item-secondary">
+                  {getDestName(item.name) !== item.name ? `${item.name} • ` : ''}
+                  {item.secondary || item.displayName}
+                </span>
               </div>
               {item.type && (
                 <span className="item-type-tag">{item.type}</span>

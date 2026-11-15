@@ -23,10 +23,12 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+    // 401 Unauthorized indicates token expiration on authenticated endpoints (excluding login endpoints)
+    if (error.response && error.response.status === 401) {
+      const isLoginRequest = error.config?.url?.includes('/auth/login') || error.config?.url?.includes('/auth/admin/login');
       const hadToken = localStorage.getItem('token') || sessionStorage.getItem('token');
-      if (hadToken) {
-        console.warn('Session expired or unauthorized (status ' + error.response.status + '). Clearing session tokens.');
+      if (hadToken && !isLoginRequest) {
+        console.warn('Session expired (status 401). Clearing session tokens.');
         localStorage.removeItem('token');
         localStorage.removeItem('role');
         localStorage.removeItem('fullName');
@@ -204,6 +206,50 @@ export const tripService = {
       console.error('Error updating member role:', error);
       throw error;
     }
+  },
+
+  addActivity: async (tripId, dayId, activityData) => {
+    try {
+      const response = await apiClient.post(`/trips/${tripId}/days/${dayId}/activities`, activityData);
+      return response.data;
+    } catch (error) {
+      console.error('Error adding activity to day:', error);
+      throw error;
+    }
+  },
+
+  reorderActivities: async (tripId, dayId, activityIds) => {
+    try {
+      const response = await apiClient.post(`/trips/${tripId}/days/${dayId}/reorder`, { activityIds });
+      return response.data;
+    } catch (error) {
+      console.error('Error reordering activities:', error);
+      throw error;
+    }
+  },
+
+  updateActivity: async (tripId, activityId, updateData) => {
+    try {
+      const response = await apiClient.put(`/trips/${tripId}/activities/${activityId}`, updateData);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating activity:', error);
+      throw error;
+    }
+  },
+
+  moveActivityToDay: async (tripId, activityId, targetDayId, targetPosition = null) => {
+    try {
+      const payload = { targetDayId };
+      if (targetPosition != null) {
+        payload.targetPosition = targetPosition;
+      }
+      const response = await apiClient.post(`/trips/${tripId}/activities/${activityId}/move-day`, payload);
+      return response.data;
+    } catch (error) {
+      console.error('Error moving activity to day:', error);
+      throw error;
+    }
   }
 };
 
@@ -256,6 +302,21 @@ export const placesService = {
       console.error('Error fetching places by category:', error);
       return [];
     }
+  },
+
+  getDestinationAttractions: async (destination, query = '', prevLat = null, prevLon = null) => {
+    try {
+      const params = { destination, query };
+      if (prevLat != null && prevLon != null) {
+        params.prevLat = prevLat;
+        params.prevLon = prevLon;
+      }
+      const response = await apiClient.get('/places/destination-attractions', { params });
+      return response.data || [];
+    } catch (error) {
+      console.error('Error fetching destination attractions:', error);
+      return [];
+    }
   }
 };
 
@@ -265,6 +326,11 @@ export const authService = {
     if (response.data.token) {
       localStorage.setItem('token', response.data.token);
     }
+    return response.data;
+  },
+
+  adminLogin: async (credentials) => {
+    const response = await apiClient.post('/auth/admin/login', credentials);
     return response.data;
   },
   
@@ -286,6 +352,55 @@ export const authService = {
     sessionStorage.removeItem('fullName');
     sessionStorage.removeItem('userEmail');
     window.dispatchEvent(new Event('authChange'));
+  },
+
+  adminLogout: async () => {
+    try {
+      await apiClient.post('/auth/admin/logout');
+    } catch (e) {
+      // Ignore network errors during logout
+    }
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    localStorage.removeItem('fullName');
+    localStorage.removeItem('userEmail');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('role');
+    sessionStorage.removeItem('fullName');
+    sessionStorage.removeItem('userEmail');
+    window.dispatchEvent(new Event('authChange'));
+  }
+};
+
+export const adminService = {
+  getOverview: async () => {
+    try {
+      const response = await apiClient.get('/admin/overview');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching admin overview:', error);
+      throw error;
+    }
+  },
+
+  getActivityLogs: async () => {
+    try {
+      const response = await apiClient.get('/admin/activity-logs');
+      return response.data || [];
+    } catch (error) {
+      console.error('Error fetching admin activity logs:', error);
+      throw error;
+    }
+  },
+
+  logAction: async (action, details) => {
+    try {
+      const response = await apiClient.post('/admin/log-action', { action, details });
+      return response.data;
+    } catch (error) {
+      console.error('Error logging admin action:', error);
+      throw error;
+    }
   }
 };
 

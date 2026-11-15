@@ -45,9 +45,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/routes", "/api/routes/**").permitAll()
                 .requestMatchers("/api/recommendations", "/api/recommendations/**").permitAll()
                 .requestMatchers("/api/trips", "/api/trips/**").permitAll()
-                .requestMatchers("/api/ai", "/api/ai/**").permitAll()
                 .requestMatchers("/api/notifications", "/api/notifications/**").permitAll()
-                .requestMatchers("/api/admin", "/api/admin/**").permitAll()
+                .requestMatchers("/api/admin/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
                 .anyRequest().authenticated()
             );
 
