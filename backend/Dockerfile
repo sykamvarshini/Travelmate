@@ -14,6 +14,16 @@ WORKDIR /app
 
 COPY --from=build /app/target/*.jar app.jar
 
+# Add the TiDB Cloud CA certificate to Java's trusted certificates
+COPY certs/tidb-ca.pem /tmp/tidb-ca.pem
+
+RUN keytool -importcert -noprompt -trustcacerts \
+    -alias tidb-cloud-ca \
+    -file /tmp/tidb-ca.pem \
+    -cacerts \
+    -storepass changeit \
+    && rm /tmp/tidb-ca.pem
+
 EXPOSE 8080
 
 ENTRYPOINT ["sh", "-c", "java -Dserver.port=${PORT:-8080} -jar app.jar"]
