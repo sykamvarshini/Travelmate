@@ -5,19 +5,28 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class WeatherService {
@@ -40,7 +49,14 @@ public class WeatherService {
     }
 
     private final Map<String, CacheEntry> weatherCache = new ConcurrentHashMap<>();
-    private static final long CACHE_TTL_MS = 15 * 60 * 1000L; // 15 minutes TTL
+    private final Map<String, CacheEntry> conditionsCache = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<Map<String, Object>>> inFlightForecasts = new ConcurrentHashMap<>();
+    private final AtomicLong rateLimitUntilMillis = new AtomicLong();
+    private final AtomicLong nextRequestAllowedMillis = new AtomicLong();
+    private static final long CACHE_TTL_MS = Duration.ofHours(6).toMillis();
+    private static final long MAX_STALE_CACHE_AGE_MS = Duration.ofHours(24).toMillis();
+    private static final long MIN_REQUEST_INTERVAL_MS = Duration.ofSeconds(1).toMillis();
+    private static final ZoneId FORECAST_ZONE = ZoneId.of("Asia/Kolkata");
 
     public WeatherService(RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
@@ -51,26 +67,13 @@ public class WeatherService {
      */
     @Nullable
     public Map<String, Object> getWeatherForecast(double lat, double lon) {
-        String url = UriComponentsBuilder.fromHttpUrl(openMeteoBaseUrl)
-                .queryParam("latitude", lat)
-                .queryParam("longitude", lon)
-                .queryParam("daily", "temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,weather_code,weathercode")
-                .queryParam("forecast_days", 16)
-                .queryParam("timezone", "Asia/Kolkata")
-                .toUriString();
-
-        try {
-            ResponseEntity<Map<String, Object>> responseEntity = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<Map<String, Object>>() {}
-            );
-            return responseEntity.getBody();
-        } catch (Exception e) {
-            log.warn("Error calling Open-Meteo forecast API for ({}, {}): {}", lat, lon, e.getMessage());
-            return null;
+        Map<String, Object> response = loadForecast(lat, lon);
+        if (response == null) {
+            CacheEntry cached = weatherCache.get(coordinateKey(lat, lon));
+            response = cached != null && System.currentTimeMillis() - cached.timestamp < MAX_STALE_CACHE_AGE_MS
+                    ? cached.data : null;
         }
+        return response != null ? new HashMap<>(response) : null;
     }
 
     /**
@@ -86,54 +89,154 @@ public class WeatherService {
      */
     public Map<String, Object> getConditionsForLocationAndDate(double lat, double lon, @Nullable LocalDate targetDate) {
         LocalDate today = LocalDate.now();
-        String dateKey = (targetDate != null) ? targetDate.toString() : "current";
-        String cacheKey = String.format(Locale.US, "%.3f_%.3f_%s", lat, lon, dateKey);
-
-        CacheEntry cached = weatherCache.get(cacheKey);
-        if (cached != null && (System.currentTimeMillis() - cached.timestamp < CACHE_TTL_MS)) {
-            return new HashMap<>(cached.data);
-        }
+        String cacheKey = coordinateKey(lat, lon);
 
         // If target date is more than 16 days ahead, numerical forecast models cannot provide daily predictions.
         // Report forecast as unavailable rather than misapplying today's weather or inventing values.
         if (targetDate != null && ChronoUnit.DAYS.between(today, targetDate) > 16) {
-            Map<String, Object> unavailable = createUnavailableConditions(targetDate,
-                    "Target date is beyond the 16-day numerical forecast horizon.");
-            weatherCache.put(cacheKey, new CacheEntry(unavailable, System.currentTimeMillis()));
-            return unavailable;
+            return createUnavailableConditions(targetDate,
+                    "Forecast Temporarily Unavailable: target date is beyond the 16-day forecast horizon.");
         }
 
-        String url = UriComponentsBuilder.fromHttpUrl(openMeteoBaseUrl)
-                .queryParam("latitude", lat)
-                .queryParam("longitude", lon)
-                .queryParam("current", "temperature_2m,relative_humidity_2m,precipitation,weather_code,weathercode")
-                .queryParam("daily", "temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,weather_code,weathercode")
-                .queryParam("forecast_days", 16)
-                .queryParam("timezone", "Asia/Kolkata")
-                .toUriString();
+        LocalDate forecastDate = targetDate != null ? targetDate : today;
+        String conditionsKey = cacheKey + ":" + forecastDate;
+        CacheEntry cachedConditions = conditionsCache.get(conditionsKey);
+        if (cachedConditions != null && System.currentTimeMillis() - cachedConditions.timestamp < CACHE_TTL_MS) {
+            return new HashMap<>(cachedConditions.data);
+        }
 
+        CacheEntry previous = weatherCache.get(cacheKey);
+        Map<String, Object> response = loadForecast(lat, lon);
+        boolean usingStaleForecast = response == null && previous != null
+                && System.currentTimeMillis() - previous.timestamp < MAX_STALE_CACHE_AGE_MS;
+        if (usingStaleForecast) {
+            response = previous.data;
+        }
+
+        if (response != null) {
+            Map<String, Object> result = processWeatherResponse(response, targetDate, today);
+            if (result != null) {
+                if (usingStaleForecast) {
+                    result.put("isStale", true);
+                    result.put("isLive", false);
+                    result.put("forecastMessage", "Live weather temporarily unavailable — showing cached forecast.");
+                } else {
+                    conditionsCache.put(conditionsKey, new CacheEntry(new HashMap<>(result), System.currentTimeMillis()));
+                }
+                return result;
+            }
+        }
+
+        return createUnavailableConditions(targetDate, "Forecast Temporarily Unavailable");
+    }
+
+    @Nullable
+    private Map<String, Object> loadForecast(double lat, double lon) {
+        String cacheKey = coordinateKey(lat, lon);
+        CacheEntry cached = weatherCache.get(cacheKey);
+        if (cached != null && System.currentTimeMillis() - cached.timestamp < CACHE_TTL_MS) {
+            return cached.data;
+        }
+
+        if (System.currentTimeMillis() < rateLimitUntilMillis.get()) {
+            return null;
+        }
+
+        CompletableFuture<Map<String, Object>> request = new CompletableFuture<>();
+        CompletableFuture<Map<String, Object>> existing = inFlightForecasts.putIfAbsent(cacheKey, request);
+        if (existing != null) {
+            return existing.join();
+        }
+        if (!reserveRequestSlot()) {
+            inFlightForecasts.remove(cacheKey, request);
+            request.complete(null);
+            return null;
+        }
+
+        Map<String, Object> result = null;
         try {
+            double normalizedLat = normalizeCoordinate(lat);
+            double normalizedLon = normalizeCoordinate(lon);
+            String url = UriComponentsBuilder.fromHttpUrl(openMeteoBaseUrl)
+                    .queryParam("latitude", normalizedLat)
+                    .queryParam("longitude", normalizedLon)
+                    .queryParam("current", "temperature_2m,relative_humidity_2m,precipitation,weather_code,weathercode")
+                    .queryParam("daily", "temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,weather_code,weathercode")
+                    .queryParam("forecast_days", 16)
+                    .queryParam("timezone", "Asia/Kolkata")
+                    .toUriString();
+
             ResponseEntity<Map<String, Object>> responseEntity = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
                     null,
                     new ParameterizedTypeReference<Map<String, Object>>() {}
             );
-            Map<String, Object> res = responseEntity.getBody();
-
-            if (res != null) {
-                Map<String, Object> result = processWeatherResponse(res, targetDate, today);
-                if (result != null) {
-                    weatherCache.put(cacheKey, new CacheEntry(result, System.currentTimeMillis()));
-                    return new HashMap<>(result);
-                }
+            Map<String, Object> body = responseEntity.getBody();
+            if (body != null && !body.isEmpty()) {
+                result = new HashMap<>(body);
+                weatherCache.put(cacheKey, new CacheEntry(result, System.currentTimeMillis()));
             }
+        } catch (HttpClientErrorException.TooManyRequests e) {
+            applyRateLimit(e.getResponseHeaders());
+            log.warn("Open-Meteo rate limit reached; suppressing forecast requests until cooldown expires.");
         } catch (Exception e) {
-            log.warn("Open-Meteo weather fetch failed for ({}, {}, {}): {}", lat, lon, targetDate, e.getMessage());
+            log.warn("Open-Meteo weather fetch failed for ({}, {}): {}", lat, lon, e.getMessage());
+        } finally {
+            request.complete(result);
+            inFlightForecasts.remove(cacheKey, request);
         }
 
-        // Return unavailable rather than fabricating fake numbers
-        return createUnavailableConditions(targetDate, "Weather forecast service unreachable or returned no data.");
+        return result;
+    }
+
+    private boolean reserveRequestSlot() {
+        long now = System.currentTimeMillis();
+        while (true) {
+            long nextAllowed = nextRequestAllowedMillis.get();
+            if (now < nextAllowed) {
+                return false;
+            }
+            if (nextRequestAllowedMillis.compareAndSet(nextAllowed, now + MIN_REQUEST_INTERVAL_MS)) {
+                return true;
+            }
+        }
+    }
+
+    private static String coordinateKey(double lat, double lon) {
+        return String.format(Locale.US, "%.2f_%.2f", normalizeCoordinate(lat), normalizeCoordinate(lon));
+    }
+
+    private static double normalizeCoordinate(double coordinate) {
+        return Math.round(coordinate * 100.0) / 100.0;
+    }
+
+    private void applyRateLimit(@Nullable HttpHeaders headers) {
+        long now = System.currentTimeMillis();
+        long cooldown = nextDailyResetMillis() - now;
+        if (headers != null) {
+            String retryAfter = headers.getFirst(HttpHeaders.RETRY_AFTER);
+            if (retryAfter != null) {
+                try {
+                    cooldown = TimeUnit.SECONDS.toMillis(Long.parseLong(retryAfter.trim()));
+                } catch (NumberFormatException ignored) {
+                    try {
+                        long retryAt = ZonedDateTime.parse(retryAfter, DateTimeFormatter.RFC_1123_DATE_TIME)
+                                .toInstant().toEpochMilli();
+                        cooldown = Math.max(0, retryAt - System.currentTimeMillis());
+                    } catch (Exception ignoredDate) {
+                        cooldown = nextDailyResetMillis() - now;
+                    }
+                }
+            }
+        }
+        cooldown = Math.max(Duration.ofSeconds(60).toMillis(), Math.min(cooldown, Duration.ofHours(24).toMillis()));
+        rateLimitUntilMillis.set(now + cooldown);
+    }
+
+    private static long nextDailyResetMillis() {
+        return LocalDate.now(FORECAST_ZONE).plusDays(1)
+                .atStartOfDay(FORECAST_ZONE).toInstant().toEpochMilli();
     }
 
     @Nullable
@@ -188,7 +291,7 @@ public class WeatherService {
                 Double dailyPrecipSumMm = (precipSums != null && matchedIdx < precipSums.size() && precipSums.get(matchedIdx) != null)
                         ? Double.parseDouble(String.valueOf(precipSums.get(matchedIdx))) : null;
                 Integer weatherCode = (weatherCodes != null && matchedIdx < weatherCodes.size() && weatherCodes.get(matchedIdx) != null)
-                        ? Integer.parseInt(String.valueOf(weatherCodes.get(matchedIdx))) : 0;
+                        ? Integer.parseInt(String.valueOf(weatherCodes.get(matchedIdx))) : null;
 
                 // If evaluating today, and current conditions exist, capture current temperature and current precipitation rate
                 Double currentPrecipRate = null;
@@ -206,7 +309,7 @@ public class WeatherService {
                     }
                 }
 
-                String condition = getWeatherDescription(weatherCode);
+                String condition = weatherCode != null ? getWeatherDescription(weatherCode) : "Forecast Temporarily Unavailable";
 
                 Map<String, Object> ret = new HashMap<>();
                 ret.put("temperatureC", temp != null ? Math.round(temp * 10.0) / 10.0 : null);
@@ -228,11 +331,11 @@ public class WeatherService {
         }
 
         // 2. Fallback to Current Conditions only if daily time is missing
-        if (current != null) {
+        if (current != null && (targetDate == null || target.equals(today))) {
             Double temp = (current.containsKey("temperature_2m") && current.get("temperature_2m") != null)
                     ? Double.parseDouble(String.valueOf(current.get("temperature_2m"))) : null;
 
-            int weatherCode = 0;
+            Integer weatherCode = null;
             if (current.containsKey("weather_code") && current.get("weather_code") != null) {
                 weatherCode = Integer.parseInt(String.valueOf(current.get("weather_code")));
             } else if (current.containsKey("weathercode") && current.get("weathercode") != null) {
@@ -251,7 +354,7 @@ public class WeatherService {
                 extractedProb = Double.parseDouble(String.valueOf(current.get("rainProbability")));
             }
 
-            String condition = getWeatherDescription(weatherCode);
+            String condition = weatherCode != null ? getWeatherDescription(weatherCode) : "Forecast Temporarily Unavailable";
 
             Map<String, Object> ret = new HashMap<>();
             ret.put("temperatureC", temp != null ? Math.round(temp * 10.0) / 10.0 : null);
@@ -275,8 +378,8 @@ public class WeatherService {
                     : (res.containsKey("temperatureC") ? Double.parseDouble(String.valueOf(res.get("temperatureC"))) : null);
             Double precip = res.containsKey("precipitation") ? Double.parseDouble(String.valueOf(res.get("precipitation")))
                     : (res.containsKey("precipitationMm") ? Double.parseDouble(String.valueOf(res.get("precipitationMm"))) : null);
-            int code = res.containsKey("weather_code") ? Integer.parseInt(String.valueOf(res.get("weather_code")))
-                    : (res.containsKey("weatherCode") ? Integer.parseInt(String.valueOf(res.get("weatherCode"))) : 0);
+            Integer code = res.containsKey("weather_code") ? Integer.parseInt(String.valueOf(res.get("weather_code")))
+                    : (res.containsKey("weatherCode") ? Integer.parseInt(String.valueOf(res.get("weatherCode"))) : null);
             Double prob = null;
             if (res.containsKey("rain_probability") && res.get("rain_probability") != null) {
                 prob = Double.parseDouble(String.valueOf(res.get("rain_probability")));
@@ -286,7 +389,8 @@ public class WeatherService {
                 prob = Double.parseDouble(String.valueOf(res.get("precipitation_probability")));
             }
             String condition = res.containsKey("weatherCondition") ? String.valueOf(res.get("weatherCondition"))
-                    : (res.containsKey("condition") ? String.valueOf(res.get("condition")) : getWeatherDescription(code));
+                    : (res.containsKey("condition") ? String.valueOf(res.get("condition"))
+                    : (code != null ? getWeatherDescription(code) : "Forecast Temporarily Unavailable"));
 
             Map<String, Object> ret = new HashMap<>();
             ret.put("temperatureC", temp != null ? Math.round(temp * 10.0) / 10.0 : null);
@@ -369,13 +473,16 @@ public class WeatherService {
         Map<String, Object> unavailable = new HashMap<>();
         unavailable.put("isAvailable", false);
         unavailable.put("isLive", false);
-        unavailable.put("weatherCondition", "Forecast Unavailable");
+        unavailable.put("weatherCondition", "Forecast Temporarily Unavailable");
+        unavailable.put("forecastMessage", "Live weather temporarily unavailable");
         unavailable.put("temperatureC", null);
         unavailable.put("rainProbability", null);
         unavailable.put("precipitationMm", null);
         unavailable.put("currentPrecipitationMm", null);
         unavailable.put("weatherCode", null);
-        unavailable.put("forecastMessage", reason != null ? reason : "Weather forecast data currently unavailable");
+        if (reason != null && !reason.isBlank()) {
+            unavailable.put("forecastReason", reason);
+        }
         if (targetDate != null) {
             unavailable.put("forecastDate", targetDate.toString());
         }

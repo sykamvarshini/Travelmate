@@ -94,6 +94,21 @@ public class SecurityRegressionIntegrationTest {
         String content = java.nio.file.Files.readString(prodYmlFile.toPath());
         assertFalse(content.matches("(?s).*password:\\s*[^$\\s]+.*"), "Production configuration must contain no plaintext passwords");
         assertTrue(content.contains("validate"), "Production profile must configure schema validation");
+        assertTrue(content.contains("base-url: ${ML_SERVICE_URL:}"),
+                "Production must not assume the ML service is running on localhost");
+
+        Map<?, ?> config = new Yaml().load(content);
+        Map<?, ?> spring = (Map<?, ?>) config.get("spring");
+        Map<?, ?> datasource = (Map<?, ?>) spring.get("datasource");
+        Map<?, ?> hikari = (Map<?, ?>) datasource.get("hikari");
+        long maxLifetime = ((Number) hikari.get("max-lifetime")).longValue();
+        long keepaliveTime = ((Number) hikari.get("keepalive-time")).longValue();
+        assertEquals(1200000L, maxLifetime);
+        assertEquals(240000L, keepaliveTime);
+        assertTrue(keepaliveTime < maxLifetime, "Hikari keepalive must be shorter than maxLifetime");
+        assertEquals(600000L, ((Number) hikari.get("idle-timeout")).longValue());
+        assertEquals(20000L, ((Number) hikari.get("connection-timeout")).longValue());
+        assertEquals(5000L, ((Number) hikari.get("validation-timeout")).longValue());
     }
 
     @Test

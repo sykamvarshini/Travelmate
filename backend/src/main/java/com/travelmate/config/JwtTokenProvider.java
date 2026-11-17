@@ -22,11 +22,13 @@ public class JwtTokenProvider {
             @Value("${app.jwt.secret:}") String secret,
             @Value("${app.jwt.expiration-ms:86400000}") long validityInMilliseconds) {
         if (!StringUtils.hasText(secret)) {
-            throw new IllegalStateException("CRITICAL SECURITY CONFIGURATION ERROR: Required environment variable 'JWT_SECRET' is not set. The application fails safely and cannot start without a secure JWT secret.");
+            throw new IllegalStateException(
+                    "CRITICAL SECURITY CONFIGURATION ERROR: Required environment variable 'JWT_SECRET' is not set. The application fails safely and cannot start without a secure JWT secret.");
         }
         byte[] secretBytes = secret.trim().getBytes(StandardCharsets.UTF_8);
         if (secretBytes.length < 32) {
-            throw new IllegalStateException("CRITICAL SECURITY CONFIGURATION ERROR: 'JWT_SECRET' must be at least 32 characters (256 bits) long for HMAC-SHA256 signing.");
+            throw new IllegalStateException(
+                    "CRITICAL SECURITY CONFIGURATION ERROR: 'JWT_SECRET' must be at least 32 characters (256 bits) long for HMAC-SHA256 signing.");
         }
         this.key = Keys.hmacShaKeyFor(secretBytes);
         this.validityInMilliseconds = validityInMilliseconds;

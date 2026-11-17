@@ -39,12 +39,26 @@ public class PlaceDiscoveryService {
 
     // Standard User-Agent for OpenStreetMap and Wikimedia APIs
     private static final String APP_USER_AGENT = "TravelMateAI/1.0 (https://travelmate.ai; contact@travelmate.ai)";
+    private static final long AUTOCOMPLETE_CACHE_TTL_MS = 15 * 60 * 1000L;
+    private static final long NOMINATIM_MIN_INTERVAL_MS = 1000L;
+
+    private static class AutocompleteCacheEntry {
+        final List<Map<String, Object>> results;
+        final long timestamp;
+
+        AutocompleteCacheEntry(List<Map<String, Object>> results) {
+            this.results = results;
+            this.timestamp = System.currentTimeMillis();
+        }
+    }
 
     // In-memory cache for fast responsive searches and low network overhead
     private final Map<String, Map<String, Object>> searchCache = new ConcurrentHashMap<>();
-    private final Map<String, List<Map<String, Object>>> autocompleteCache = new ConcurrentHashMap<>();
+    private final Map<String, AutocompleteCacheEntry> autocompleteCache = new ConcurrentHashMap<>();
     private final Map<String, List<Map<String, Object>>> nearbyCache = new ConcurrentHashMap<>();
     private final Map<String, List<Map<String, Object>>> categoryCache = new ConcurrentHashMap<>();
+    private final Object nominatimThrottleLock = new Object();
+    private long nextNominatimRequestAtMillis;
 
     // Well-known foreign destinations to ensure strict India-only scope
     private static final Set<String> FOREIGN_DESTINATIONS = Set.of(
@@ -123,8 +137,9 @@ public class PlaceDiscoveryService {
         }
         String cleanQuery = query.trim().toLowerCase();
 
-        if (autocompleteCache.containsKey(cleanQuery)) {
-            return autocompleteCache.get(cleanQuery);
+        AutocompleteCacheEntry cached = autocompleteCache.get(cleanQuery);
+        if (cached != null && System.currentTimeMillis() - cached.timestamp < AUTOCOMPLETE_CACHE_TTL_MS) {
+            return new ArrayList<>(cached.results);
         }
 
         List<Map<String, Object>> results = new ArrayList<>();
@@ -251,7 +266,7 @@ public class PlaceDiscoveryService {
         }
 
         // 4. Open Location Engine (Nominatim) fallback if results are scarce
-        if (results.size() < 5) {
+        if (results.size() < 5 && allowNominatimAutocompleteRequest()) {
             try {
                 URI nomUri = URI.create(nominatimBaseUrl + "/search?q=" 
                         + URLEncoder.encode(query, StandardCharsets.UTF_8) 
@@ -304,8 +319,20 @@ public class PlaceDiscoveryService {
             }
         }
 
-        autocompleteCache.put(cleanQuery, results);
-        return results;
+        List<Map<String, Object>> cachedResults = new ArrayList<>(results);
+        autocompleteCache.put(cleanQuery, new AutocompleteCacheEntry(cachedResults));
+        return new ArrayList<>(cachedResults);
+    }
+
+    private boolean allowNominatimAutocompleteRequest() {
+        synchronized (nominatimThrottleLock) {
+            long now = System.currentTimeMillis();
+            if (now < nextNominatimRequestAtMillis) {
+                return false;
+            }
+            nextNominatimRequestAtMillis = now + NOMINATIM_MIN_INTERVAL_MS;
+            return true;
+        }
     }
 
     /**

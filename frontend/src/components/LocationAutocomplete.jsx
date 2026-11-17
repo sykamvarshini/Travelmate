@@ -18,12 +18,15 @@ const LocationAutocomplete = ({
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const containerRef = useRef(null);
+  const autocompleteRequestId = useRef(0);
 
   // Debounced search for suggestions
   useEffect(() => {
+    const requestId = ++autocompleteRequestId.current;
     if (!value || value.trim().length < 2) {
       setSuggestions([]);
       setIsOpen(false);
+      setIsLoading(false);
       return;
     }
 
@@ -31,16 +34,27 @@ const LocationAutocomplete = ({
       setIsLoading(true);
       try {
         const results = await placesService.autocomplete(value);
-        setSuggestions(results);
-        setIsOpen(results.length > 0);
+        if (requestId === autocompleteRequestId.current) {
+          setSuggestions(results);
+          setIsOpen(results.length > 0);
+        }
       } catch (err) {
-        console.error("Autocomplete error:", err);
+        if (requestId === autocompleteRequestId.current) {
+          console.error("Autocomplete error:", err);
+        }
       } finally {
-        setIsLoading(false);
+        if (requestId === autocompleteRequestId.current) {
+          setIsLoading(false);
+        }
       }
     }, 280);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      if (autocompleteRequestId.current === requestId) {
+        autocompleteRequestId.current += 1;
+      }
+    };
   }, [value]);
 
   // Click outside listener

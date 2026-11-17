@@ -5,6 +5,8 @@ import com.travelmate.entity.Trip;
 import com.travelmate.entity.User;
 import com.travelmate.repository.TripRepository;
 import com.travelmate.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -36,6 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Transactional
 public class TripService {
+    private static final Logger log = LoggerFactory.getLogger(TripService.class);
 
     private final TripRepository tripRepository;
     private final UserRepository userRepository;
@@ -537,23 +540,31 @@ public class TripService {
                     // Fetch accurate weather forecast for destination on planned day
                     try {
                         Map<String, Object> dayWeather = weatherService.getConditionsForLocationAndDate(destLat, destLon, dayDate);
-                        if (dayWeather != null && dayWeather.containsKey("weatherCondition")) {
+                        if (dayWeather != null && Boolean.TRUE.equals(dayWeather.get("isAvailable"))) {
                             day.setWeatherCondition(String.valueOf(dayWeather.get("weatherCondition")));
-                            day.setMaxTempC(((Number) dayWeather.getOrDefault("temperatureC", 30.0)).doubleValue());
-                            day.setMinTempC(((Number) dayWeather.getOrDefault("minTemperatureC", 22.0)).doubleValue());
-                            double p = ((Number) dayWeather.getOrDefault("rainProbability", 10.0)).doubleValue();
-                            day.setRainProbability(p > 1.0 ? p / 100.0 : p);
+                            day.setMaxTempC(dayWeather.get("temperatureC") instanceof Number
+                                    ? ((Number) dayWeather.get("temperatureC")).doubleValue() : null);
+                            day.setMinTempC(dayWeather.get("minTemperatureC") instanceof Number
+                                    ? ((Number) dayWeather.get("minTemperatureC")).doubleValue() : null);
+                            Object rainValue = dayWeather.get("rainProbability");
+                            if (rainValue instanceof Number) {
+                                double probability = ((Number) rainValue).doubleValue();
+                                day.setRainProbability(probability > 1.0 ? probability / 100.0 : probability);
+                            } else {
+                                day.setRainProbability(null);
+                            }
                         } else {
-                            day.setWeatherCondition("Clear Sky");
-                            day.setMaxTempC(30.0);
-                            day.setMinTempC(22.0);
-                            day.setRainProbability(0.10);
+                            day.setWeatherCondition("Forecast Temporarily Unavailable");
+                            day.setMaxTempC(null);
+                            day.setMinTempC(null);
+                            day.setRainProbability(null);
                         }
-                    } catch (Exception _we) {
-                        day.setWeatherCondition("Clear Sky");
-                        day.setMaxTempC(30.0);
-                        day.setMinTempC(22.0);
-                        day.setRainProbability(0.10);
+                    } catch (Exception weatherError) {
+                        log.warn("Unable to load forecast for itinerary date {}: {}", dayDate, weatherError.getMessage());
+                        day.setWeatherCondition("Forecast Temporarily Unavailable");
+                        day.setMaxTempC(null);
+                        day.setMinTempC(null);
+                        day.setRainProbability(null);
                     }
 
                     List<Map<String, Object>> dayRecs = (i < optimizedDays.size()) ? optimizedDays.get(i)
@@ -939,11 +950,16 @@ public class TripService {
             throw new RuntimeException("Day not found in this trip");
         }
 
+        if (rainProb == null) {
+            throw new IllegalArgumentException("Rain forecast is unavailable; the itinerary was not adapted.");
+        }
         // Normalize rain probability safely (handles 0.0-1.0 and 0-100 formats)
-        double normalizedProb = (rainProb != null && rainProb > 1.0) ? (rainProb / 100.0) : (rainProb != null ? rainProb : 0.0);
+        double normalizedProb = rainProb > 1.0 ? rainProb / 100.0 : rainProb;
         targetDay.setWeatherCondition(weatherCondition);
         targetDay.setRainProbability(normalizedProb);
-        targetDay.setMaxTempC(temp != null ? temp : 28.0);
+        if (temp != null) {
+            targetDay.setMaxTempC(temp);
+        }
 
         boolean needsAdaptation = normalizedProb >= 0.50;
 
@@ -1238,11 +1254,9 @@ public class TripService {
         response.put("nextCategory", nextItem.getCategory());
         response.put("nextIndoorOutdoor", nextItem.getIndoorOutdoor());
 
-        // Live or Verified Coordinates
-        double destLat = nextItem.getLatitude() != null ? nextItem.getLatitude()
-                : (trip.getDestinationLatitude() != null ? trip.getDestinationLatitude() : 16.5062);
-        double destLon = nextItem.getLongitude() != null ? nextItem.getLongitude()
-                : (trip.getDestinationLongitude() != null ? trip.getDestinationLongitude() : 80.6480);
+        // Use the trip destination for a consistent daily reading across itinerary and activity checks.
+        Double destLat = trip.getDestinationLatitude() != null ? trip.getDestinationLatitude() : nextItem.getLatitude();
+        Double destLon = trip.getDestinationLongitude() != null ? trip.getDestinationLongitude() : nextItem.getLongitude();
 
         // Determine the planned date of the next activity
         java.time.LocalDate activityDate = (nextDay != null) ? nextDay.getDate() : null;
@@ -1251,12 +1265,15 @@ public class TripService {
         }
 
         // Fetch Real Weather for Location and Planned Date without artificial overrides
-        Map<String, Object> weather = weatherService.getConditionsForLocationAndDate(destLat, destLon, activityDate);
-        boolean weatherAvailable = weather != null && Boolean.TRUE.equals(weather.get("isLive")) && weather.get("rainProbability") != null;
+        Map<String, Object> weather = destLat != null && destLon != null
+                ? weatherService.getConditionsForLocationAndDate(destLat, destLon, activityDate) : null;
+        boolean weatherAvailable = weather != null && Boolean.TRUE.equals(weather.get("isAvailable"));
 
-        Double rainProb = weatherAvailable ? ((Number) weather.get("rainProbability")).doubleValue() : null;
+        Double rainProb = weatherAvailable && weather.get("rainProbability") instanceof Number
+                ? ((Number) weather.get("rainProbability")).doubleValue() : null;
         Double tempC = weatherAvailable && weather.get("temperatureC") != null ? ((Number) weather.get("temperatureC")).doubleValue() : null;
-        String weatherDesc = weatherAvailable && weather.get("weatherCondition") != null ? weather.get("weatherCondition").toString() : "Forecast Unavailable";
+        String weatherDesc = weatherAvailable && weather.get("weatherCondition") != null
+                ? weather.get("weatherCondition").toString() : "Live weather temporarily unavailable";
         Double precipMm = weatherAvailable && weather.get("precipitationMm") != null ? ((Number) weather.get("precipitationMm")).doubleValue() : null;
         Double currentPrecipMm = weatherAvailable && weather.get("currentPrecipitationMm") != null ? ((Number) weather.get("currentPrecipitationMm")).doubleValue() : null;
         Integer weatherCode = weatherAvailable && weather.get("weatherCode") != null ? ((Number) weather.get("weatherCode")).intValue() : null;
@@ -1271,6 +1288,8 @@ public class TripService {
         liveConditions.put("precipitationMm", precipMm);
         liveConditions.put("currentPrecipitationMm", currentPrecipMm);
         liveConditions.put("weatherAvailable", weatherAvailable);
+        liveConditions.put("forecastMessage", weather != null ? weather.get("forecastMessage") : "Live weather temporarily unavailable");
+        liveConditions.put("isStale", weather != null && Boolean.TRUE.equals(weather.get("isStale")));
 
         // Support simulated weather check for testing - kept completely separate from live weather
         boolean isSimulated = weatherOverride != null 
@@ -2528,9 +2547,7 @@ public class TripService {
                 newDay.setTrip(trip);
                 newDay.setDayNumber(i + 1);
                 newDay.setDate(trip.getStartDate().plusDays(i));
-                newDay.setWeatherCondition("Clear Sky");
-                newDay.setMaxTempC(30.0);
-                newDay.setMinTempC(22.0);
+                newDay.setWeatherCondition("Forecast Temporarily Unavailable");
 
                 int itemsAdded = 0;
                 java.time.LocalTime clock = java.time.LocalTime.of(9, 30);
@@ -2774,9 +2791,7 @@ public class TripService {
             day.setTrip(trip);
             day.setDayNumber(i + 1);
             day.setDate(trip.getStartDate().plusDays(i));
-            day.setWeatherCondition("Clear Sky");
-            day.setMaxTempC(30.0);
-            day.setMinTempC(22.0);
+            day.setWeatherCondition("Forecast Temporarily Unavailable");
 
             List<Map<String, Object>> dayRecs = (i < optimizedDays.size()) ? optimizedDays.get(i)
                     : Collections.emptyList();

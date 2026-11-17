@@ -21,10 +21,10 @@ public class ItineraryDay {
     private Integer dayNumber;
     private LocalDate date;
 
-    private String weatherCondition = "Sunny";
-    private Double rainProbability = 0.10;
-    private Double maxTempC = 30.0;
-    private Double minTempC = 23.0;
+    private String weatherCondition = "Forecast Temporarily Unavailable";
+    private Double rainProbability;
+    private Double maxTempC;
+    private Double minTempC;
 
     @Column(columnDefinition = "TEXT")
     private String notes;

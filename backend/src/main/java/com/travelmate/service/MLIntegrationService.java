@@ -1,5 +1,7 @@
 package com.travelmate.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -15,6 +17,7 @@ import java.util.Map;
 
 @Service
 public class MLIntegrationService {
+    private static final Logger log = LoggerFactory.getLogger(MLIntegrationService.class);
 
     @Value("${app.ml-service.base-url:${ml.service.url:http://localhost:8000}}")
     private String mlServiceUrl;
@@ -27,7 +30,12 @@ public class MLIntegrationService {
 
     @Nullable
     public Map<String, Object> getRecommendations(Map<String, Object> request) {
-        String url = mlServiceUrl + "/recommend";
+        if (mlServiceUrl == null || mlServiceUrl.isBlank()) {
+            log.debug("ML recommendations are disabled because ML_SERVICE_URL is not configured.");
+            return null;
+        }
+
+        String url = mlServiceUrl.replaceAll("/+$", "") + "/recommend";
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
@@ -43,7 +51,7 @@ public class MLIntegrationService {
 
             return response.getBody();
         } catch (Exception e) {
-            System.out.println("ML service query skipped or offline: " + e.getMessage());
+            log.warn("ML recommendations are unavailable; continuing without them: {}", e.getMessage());
             return null;
         }
     }

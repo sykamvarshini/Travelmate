@@ -9,6 +9,9 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
   }
 });
+const AUTOCOMPLETE_CACHE_TTL_MS = 5 * 60 * 1000;
+const autocompleteCache = new Map();
+const autocompleteRequests = new Map();
 
 // Interceptor to attach JWT token to requests if available
 apiClient.interceptors.request.use((config) => {
@@ -256,15 +259,32 @@ export const tripService = {
 export const placesService = {
   autocomplete: async (query) => {
     if (!query || query.trim().length < 2) return [];
-    try {
-      const response = await apiClient.get('/places/autocomplete', {
-        params: { query: query.trim() }
-      });
-      return response.data || [];
-    } catch (error) {
-      console.error('Error fetching autocomplete:', error);
-      return [];
+    const cacheKey = query.trim().toLowerCase();
+    const cached = autocompleteCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < AUTOCOMPLETE_CACHE_TTL_MS) {
+      return cached.results;
     }
+
+    const pending = autocompleteRequests.get(cacheKey);
+    if (pending) return pending;
+
+    const request = apiClient.get('/places/autocomplete', {
+      params: { query: query.trim() },
+      timeout: 5000
+    }).then((response) => {
+      const results = response.data || [];
+      autocompleteCache.set(cacheKey, { results, timestamp: Date.now() });
+      return results;
+    }).catch((error) => {
+      console.error('Error fetching autocomplete:', error);
+      autocompleteCache.set(cacheKey, { results: [], timestamp: Date.now() });
+      return [];
+    }).finally(() => {
+      autocompleteRequests.delete(cacheKey);
+    });
+
+    autocompleteRequests.set(cacheKey, request);
+    return request;
   },
 
   search: async (query) => {
