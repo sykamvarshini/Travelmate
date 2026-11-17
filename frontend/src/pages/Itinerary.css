@@ -1540,6 +1540,16 @@
   color: #b91c1c;
 }
 
+.metric-card.warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.metric-card.warning strong {
+  color: #b45309;
+}
+
 .metric-label {
   display: block;
   font-size: 0.7rem;

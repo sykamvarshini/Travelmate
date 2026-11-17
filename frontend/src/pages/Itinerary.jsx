@@ -113,7 +113,14 @@ const KNOWN_GEO = {
   chennai: [13.0827, 80.2707],
   delhi: [28.6139, 77.2090],
   mumbai: [19.0760, 72.8777],
-  goa: [15.2993, 74.1240],
+  goa: [15.4909, 73.8278],
+  panaji: [15.4909, 73.8278],
+  "fort aguada": [15.4925, 73.7737],
+  "aguada fort": [15.4925, 73.7737],
+  "fort aguada lighthouse": [15.4925, 73.7737],
+  "candolim beach": [15.5170, 73.7650],
+  "calangute beach": [15.5430, 73.7550],
+  "baga beach": [15.5553, 73.7517],
   jaipur: [26.9124, 75.7873],
   "kanaka durga temple": [16.5161, 80.6074],
   "undavalli caves": [16.4965, 80.5815],
@@ -437,36 +444,106 @@ const Itinerary = () => {
           }
         });
 
-        // 4. Fetch Real Weather Forecast
+        // 4. Fetch Real Weather Forecast (Consistent coordinates and forecast periods)
         if (destCoords) {
           try {
-            const weatherData = await weatherService.getWeatherForecast(destCoords[0], destCoords[1]);
-            if (weatherData && weatherData.daily) {
-              data.days = data.days.map((day, idx) => {
-                const wIdx = Math.min(idx, weatherData.daily.time.length - 1);
-                const temp = Math.round(weatherData.daily.temperature_2m_max[wIdx]);
-                const code = weatherData.daily.weathercode[wIdx];
-                const rainProb = weatherData.daily.precipitation_probability_max[wIdx];
+            const coordWeatherCache = {};
+            const fetchWeather = async (coords) => {
+              const key = `${coords[0].toFixed(3)}_${coords[1].toFixed(3)}`;
+              if (!coordWeatherCache[key]) {
+                coordWeatherCache[key] = await weatherService.getWeatherForecast(coords[0], coords[1]);
+              }
+              return coordWeatherCache[key];
+            };
+
+            const updatedDays = await Promise.all(data.days.map(async (day, idx) => {
+              // Target coordinates for this day's planned activities (using primary activity or destination)
+              const actWithCoords = day.activities?.find(a => a.coordinates && Array.isArray(a.coordinates) && a.coordinates.length === 2);
+              const targetCoords = actWithCoords ? actWithCoords.coordinates : destCoords;
+
+              const weatherData = await fetchWeather(targetCoords);
+              if (weatherData && weatherData.daily && weatherData.daily.time) {
+                const times = weatherData.daily.time;
+                const codes = weatherData.daily.weather_code || weatherData.daily.weathercode || [];
+                const maxTemps = weatherData.daily.temperature_2m_max || [];
+                const rainProbs = weatherData.daily.precipitation_probability_max || [];
+                const precipSums = weatherData.daily.precipitation_sum || [];
+
+                // Find matching forecast date for this itinerary day
+                let wIdx = -1;
+                const dayDateStr = day.date ? (typeof day.date === 'string' ? day.date.split('T')[0] : '') : '';
                 
+                if (dayDateStr) {
+                  wIdx = times.findIndex(t => t === dayDateStr);
+                }
+                
+                // If date was not matched (e.g. day within 16-day window starting today)
+                if (wIdx === -1 && idx < times.length && (!dayDateStr || dayDateStr < times[0])) {
+                  wIdx = Math.min(idx, times.length - 1);
+                }
+
+                // If date is beyond available forecast horizon (> 16 days), show unavailable rather than inventing fake numbers
+                if (wIdx === -1) {
+                  return {
+                    ...day,
+                    weather: "Forecast Unavailable",
+                    rainProbability: null,
+                    precipitationMm: null,
+                    isWeatherUnavailable: true,
+                    hasWeatherAlert: false,
+                    weatherAlertText: null
+                  };
+                }
+
+                const temp = maxTemps[wIdx] != null ? Math.round(maxTemps[wIdx]) : null;
+                const code = codes[wIdx] != null ? codes[wIdx] : 0;
+                const rainProb = rainProbs[wIdx] != null ? Math.round(rainProbs[wIdx]) : null;
+                const precipSum = precipSums[wIdx] != null ? Number(precipSums[wIdx]) : null;
+                
+                // Comprehensive WMO Weather Code Mapping
                 let condition = "Sunny";
-                if (code >= 1 && code <= 3) condition = "Partly Cloudy";
-                if (code >= 51 && code <= 67) condition = "Rainy";
-                if (code >= 71) condition = "Snowy";
-                if (code >= 95) condition = "Thunderstorm";
-                
-                const isRainRisk = condition === "Rainy" || condition === "Thunderstorm" || rainProb > 40;
+                if (code === 1 || code === 2) condition = "Partly Cloudy";
+                else if (code === 3) condition = "Overcast";
+                else if (code === 45 || code === 48) condition = "Foggy";
+                else if (code === 51 || code === 53 || code === 55) condition = "Light Drizzle";
+                else if (code === 61 || code === 63) condition = "Rainy";
+                else if (code === 65) condition = "Heavy Rain";
+                else if (code === 71 || code === 73 || code === 75) condition = "Snowy";
+                else if (code === 80) condition = "Passing Showers";
+                else if (code === 81) condition = "Rain Showers";
+                else if (code === 82) condition = "Heavy Showers";
+                else if (code >= 95) condition = "Thunderstorm";
+
+                // Severe weather detection matches backend: rainProb >= 60%, code 65/82/95+, or precipSum >= 5.0 with rainProb >= 50%
+                const isSevereRain = (rainProb != null && rainProb >= 60) || 
+                                     (code >= 95) || (code === 65 || code === 82) || 
+                                     (precipSum != null && precipSum >= 5.0 && rainProb != null && rainProb >= 50);
                 
                 return {
                   ...day,
-                  weather: `${condition}, ${temp}°C`,
+                  weather: temp != null ? `${condition}, ${temp}°C` : condition,
                   rainProbability: rainProb,
-                  hasWeatherAlert: isRainRisk,
-                  weatherAlertText: isRainRisk 
-                    ? `Precipitation risk (${rainProb}% chance of rain) expected during outdoor visits.` 
+                  precipitationMm: precipSum,
+                  isWeatherUnavailable: false,
+                  hasWeatherAlert: isSevereRain,
+                  weatherAlertText: isSevereRain 
+                    ? `Inclement weather expected (${condition}, ${rainProb}% rain chance, ${precipSum}mm). Consider indoor activities.` 
                     : null
                 };
-              });
-            }
+              }
+
+              return {
+                ...day,
+                weather: "Forecast Unavailable",
+                rainProbability: null,
+                precipitationMm: null,
+                isWeatherUnavailable: true,
+                hasWeatherAlert: false,
+                weatherAlertText: null
+              };
+            }));
+
+            data.days = updatedDays;
           } catch (e) {
             console.error("Live weather fetch failed", e);
           }
@@ -565,6 +642,39 @@ const Itinerary = () => {
     } catch (err) {
       console.error('Failed to complete activity', err);
       showToast('Could not complete activity. Please try again.');
+    }
+  };
+
+  // Action: Switch from Simulation back to Live Weather (Clear simulation mode immediately)
+  const handleSwitchToLiveWeather = async (activityId) => {
+    try {
+      showToast('Fetching real-time weather from Open-Meteo...');
+      const actId = activityId || nextActivity?.id || (trip?.days?.[0]?.activities?.[0]?.id);
+      const checkRes = await tripService.checkNextActivity(trip.id, actId, 'live');
+      setNextDestinationCheck(checkRes);
+      if (checkRes.isSuitable) {
+        setShowNextConditionAlert(false);
+        showToast(`✓ Switched to live weather. Next destination (${checkRes.nextActivityTitle}) is clear!`);
+      } else {
+        showToast('✓ Switched to actual live meteorological forecast.');
+      }
+    } catch (err) {
+      console.error('Failed to switch to live weather', err);
+      showToast('Could not fetch live weather. Please try again.');
+    }
+  };
+
+  // Action: Preview Live Conditions for Next Activity (without completing)
+  const handleCheckNextActivityLive = async (activityId) => {
+    try {
+      showToast('Checking live weather for next destination...');
+      const actId = activityId || nextActivity?.id || (trip?.days?.[0]?.activities?.[0]?.id);
+      const checkRes = await tripService.checkNextActivity(trip.id, actId, 'live');
+      setNextDestinationCheck(checkRes);
+      setShowNextConditionAlert(true);
+    } catch (err) {
+      console.error('Failed to check destination live weather', err);
+      showToast('Could not retrieve live destination weather.');
     }
   };
 
@@ -1159,7 +1269,13 @@ const Itinerary = () => {
   const handleAdaptDay = async (dayId) => {
     setAdaptingDay(dayId);
     try {
-      const updatedTrip = await tripService.adaptDay(id, dayId, 'Rainy', 0.85, 25.0);
+      const targetDayObj = trip?.days?.find(d => d.id === dayId);
+      const condition = targetDayObj?.weather?.split(',')[0] || 'Rainy';
+      const rainProbVal = targetDayObj?.rainProbability != null ? targetDayObj.rainProbability / 100.0 : 0.70;
+      const tempMatch = targetDayObj?.weather?.match(/(\d+)°C/);
+      const tempVal = tempMatch ? parseFloat(tempMatch[1]) : 24.0;
+
+      const updatedTrip = await tripService.adaptDay(id, dayId, condition, rainProbVal, tempVal);
       
       const removedItems = [];
       const addedItems = [];
@@ -1178,7 +1294,7 @@ const Itinerary = () => {
 
           return {
             ...day,
-            weather: "Rainy, 24°C",
+            weather: `${condition}, ${Math.round(tempVal)}°C`,
             theme: "Weather-Protected Indoor Plan",
             hasWeatherAlert: false, // resolved by adaptation
             activities: day.items ? day.items.map((item, actIdx) => ({
@@ -1207,10 +1323,10 @@ const Itinerary = () => {
         days: updatedTrip.days
       }));
 
-      // Record adaptation change log
+      // Record adaptation change log with real forecast probability
       setAdaptationLog({
         whatChanged: `Day ${dayId ? 'Schedule' : '1'} adapted for inclement weather forecast`,
-        whyChanged: `Heavy rainfall detected (>80% probability). Outdoor viewpoints and open parks replaced with verified indoor museums, art galleries, and cultural heritage centers.`,
+        whyChanged: `Elevated precipitation expected (${Math.round(rainProbVal * 100)}% chance, ${condition}). Outdoor viewpoints and open parks replaced with verified indoor museums, art galleries, and cultural heritage centers.`,
         removed: removedItems.length > 0 ? removedItems : ["Outdoor viewpoints & open parks"],
         added: addedItems.length > 0 ? addedItems : ["Verified State Museum & Art Gallery", "Cultural Indoor Heritage Centre"]
       });
@@ -1341,6 +1457,15 @@ const Itinerary = () => {
               )}
               <div className="status-actions">
                 <button 
+                  type="button"
+                  className="btn-check-live"
+                  style={{ background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd', padding: '5px 12px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                  onClick={() => handleCheckNextActivityLive(nextActivity.id)}
+                  title="Check actual live forecast and travel conditions from Open-Meteo"
+                >
+                  <Sun size={13} className="text-amber" /> Check Live Weather
+                </button>
+                <button 
                   className="locate-btn"
                   onClick={() => handleLocateOnMap(nextActivity)}
                   title="Locate next activity on Map"
@@ -1352,7 +1477,7 @@ const Itinerary = () => {
                   onClick={() => handleMarkCompleted(nextActivity.id, 'rain')}
                   title="Test adaptive flow: simulate adverse weather at this destination"
                 >
-                  {t('itinerary.testRain')}
+                  🧪 {t('itinerary.testRain')}
                 </button>
               </div>
             </>
@@ -2153,19 +2278,96 @@ const Itinerary = () => {
                 <AlertTriangle size={24} className="warning-icon" />
               </div>
               <div>
-                <h3>⚠️ Conditions at your next destination have changed</h3>
-                <p>Your next activity (<strong>{nextDestinationCheck.nextActivityTitle}</strong>) may be affected by current conditions.</p>
+                <h3>{nextDestinationCheck.isSimulated ? '🧪 Test Simulation: Adverse Weather Alert' : '⚠️ Conditions at your next destination have changed'}</h3>
+                <p>
+                  Your next activity (<strong>{nextDestinationCheck.nextActivityTitle}</strong>) may be affected by {nextDestinationCheck.isSimulated ? 'a simulated test scenario' : 'current forecast conditions'}
+                  {nextDestinationCheck.isSimulated && <span className="simulated-badge" style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: '12px', fontWeight: '700', border: '1px solid #f59e0b' }}>Simulated Test Mode</span>}.
+                </p>
               </div>
             </div>
 
-            <div className="condition-metrics-grid">
-              <div className={`metric-card ${nextDestinationCheck.rainProbability > 30 ? 'risk' : 'normal'}`}>
-                <CloudRain size={20} />
-                <div>
-                  <span className="metric-label">Rain Probability</span>
-                  <strong>{nextDestinationCheck.rainProbability || 0}% ({nextDestinationCheck.rainProbability > 40 ? 'High' : 'Low'})</strong>
+            {nextDestinationCheck.isSimulated && (
+              <div className="simulation-mode-banner" style={{ background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <AlertCircle size={20} color="#b45309" />
+                  <div>
+                    <strong style={{ color: '#92400e', display: 'block', fontSize: '0.9rem' }}>Simulation Active (Test Scenario)</strong>
+                    <span style={{ color: '#78350f', fontSize: '0.8rem' }}>Displaying simulated adverse conditions to verify TravelMate's adaptive itinerary rerouting.</span>
+                  </div>
+                </div>
+                <button 
+                  type="button" 
+                  className="btn-switch-live" 
+                  onClick={() => handleSwitchToLiveWeather(nextDestinationCheck.currentActivityId || nextDestinationCheck.nextActivityId)}
+                  style={{ background: '#0284c7', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Sun size={14} /> Switch to Live Weather
+                </button>
+              </div>
+            )}
+
+            {/* When simulation is active, show the real weather readings in a dedicated separate card */}
+            {nextDestinationCheck.isSimulated && nextDestinationCheck.liveWeather && (
+              <div className="actual-live-weather-card" style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '12px 14px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <strong style={{ fontSize: '0.85rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Sun size={15} className="text-amber" /> Actual Live Weather at Destination (Open-Meteo API)
+                  </strong>
+                  <span style={{ fontSize: '0.72rem', background: '#e2e8f0', color: '#334155', padding: '2px 8px', borderRadius: '10px', fontWeight: '600' }}>Real Live Readings</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', fontSize: '0.8rem', color: '#334155' }}>
+                  <div>Condition: <strong>{nextDestinationCheck.liveWeather.weather || 'Clear'}</strong></div>
+                  <div>Rain Probability: <strong>{nextDestinationCheck.liveWeather.rainProbability || 'Unavailable'}</strong></div>
+                  <div>Daily Rainfall: <strong>{nextDestinationCheck.liveWeather.precipitationMm != null ? `${nextDestinationCheck.liveWeather.precipitationMm} mm` : '0 mm'}</strong></div>
+                  <div>Temperature: <strong>{nextDestinationCheck.liveWeather.temperature || 'Unavailable'}</strong></div>
                 </div>
               </div>
+            )}
+
+            {nextDestinationCheck.isSimulated && (
+              <div style={{ fontSize: '0.8rem', fontWeight: '700', color: '#b45309', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                🧪 Simulated Test Conditions (For Rerouting Evaluation):
+              </div>
+            )}
+
+            <div className="condition-metrics-grid">
+              <div className={`metric-card ${nextDestinationCheck.rainProbability >= 60 ? 'risk' : (nextDestinationCheck.rainProbability >= 30 ? 'warning' : 'normal')}`}>
+                <CloudRain size={20} />
+                <div>
+                  <span className="metric-label">Rain Probability (Daily Max)</span>
+                  <strong>{nextDestinationCheck.rainProbability != null ? `${nextDestinationCheck.rainProbability}% (${nextDestinationCheck.rainProbability >= 60 ? 'High' : (nextDestinationCheck.rainProbability >= 30 ? 'Moderate' : 'Low')})` : 'Forecast Unavailable'}</strong>
+                </div>
+              </div>
+
+              {nextDestinationCheck.precipitationMm != null && (
+                <div className={`metric-card ${nextDestinationCheck.precipitationMm >= 2.5 ? 'risk' : 'warning'}`}>
+                  <CloudRain size={20} />
+                  <div>
+                    <span className="metric-label">Daily Rainfall Forecast</span>
+                    <strong>{nextDestinationCheck.precipitationMm} mm ({nextDestinationCheck.precipitationMm >= 7.5 ? 'Heavy Rain' : (nextDestinationCheck.precipitationMm >= 2.5 ? 'Moderate Rain' : 'Light Rain')})</strong>
+                  </div>
+                </div>
+              )}
+
+              {nextDestinationCheck.currentPrecipitationMm != null && nextDestinationCheck.currentPrecipitationMm > 0 && (
+                <div className="metric-card risk">
+                  <CloudRain size={20} />
+                  <div>
+                    <span className="metric-label">Current Hourly Rainfall</span>
+                    <strong>{nextDestinationCheck.currentPrecipitationMm} mm/h (Raining Now)</strong>
+                  </div>
+                </div>
+              )}
+
+              {nextDestinationCheck.conditions?.weather && (
+                <div className="metric-card normal">
+                  <CloudRain size={20} />
+                  <div>
+                    <span className="metric-label">Weather Condition</span>
+                    <strong>{nextDestinationCheck.conditions.weather}</strong>
+                  </div>
+                </div>
+              )}
 
               <div className="metric-card normal">
                 <Sun size={20} />
@@ -2250,9 +2452,25 @@ const Itinerary = () => {
             )}
 
             <div className="modal-action-buttons">
+              {nextDestinationCheck.isSimulated && (
+                <button 
+                  type="button"
+                  className="btn-modal-secondary"
+                  style={{ background: '#f0f9ff', borderColor: '#bae6fd', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  onClick={() => handleSwitchToLiveWeather(nextDestinationCheck.currentActivityId || nextDestinationCheck.nextActivityId)}
+                >
+                  <Sun size={14} className="text-amber" /> Switch to Live Weather
+                </button>
+              )}
+
               <button 
                 className="btn-modal-secondary"
-                onClick={() => setShowNextConditionAlert(false)}
+                onClick={() => {
+                  setShowNextConditionAlert(false);
+                  if (nextDestinationCheck?.isSimulated) {
+                    setNextDestinationCheck(prev => prev ? { ...prev, isSimulated: false } : null);
+                  }
+                }}
               >
                 [Keep Original]
               </button>

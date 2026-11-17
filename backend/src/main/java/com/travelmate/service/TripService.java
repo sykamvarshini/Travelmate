@@ -531,12 +531,30 @@ public class TripService {
                     ItineraryDay day = new ItineraryDay();
                     day.setTrip(trip);
                     day.setDayNumber(i + 1);
-                    day.setDate(trip.getStartDate().plusDays(i));
+                    java.time.LocalDate dayDate = trip.getStartDate().plusDays(i);
+                    day.setDate(dayDate);
 
-                    // Simple live weather representation
-                    day.setWeatherCondition("Clear Sky");
-                    day.setMaxTempC(30.0);
-                    day.setMinTempC(22.0);
+                    // Fetch accurate weather forecast for destination on planned day
+                    try {
+                        Map<String, Object> dayWeather = weatherService.getConditionsForLocationAndDate(destLat, destLon, dayDate);
+                        if (dayWeather != null && dayWeather.containsKey("weatherCondition")) {
+                            day.setWeatherCondition(String.valueOf(dayWeather.get("weatherCondition")));
+                            day.setMaxTempC(((Number) dayWeather.getOrDefault("temperatureC", 30.0)).doubleValue());
+                            day.setMinTempC(((Number) dayWeather.getOrDefault("minTemperatureC", 22.0)).doubleValue());
+                            double p = ((Number) dayWeather.getOrDefault("rainProbability", 10.0)).doubleValue();
+                            day.setRainProbability(p > 1.0 ? p / 100.0 : p);
+                        } else {
+                            day.setWeatherCondition("Clear Sky");
+                            day.setMaxTempC(30.0);
+                            day.setMinTempC(22.0);
+                            day.setRainProbability(0.10);
+                        }
+                    } catch (Exception _we) {
+                        day.setWeatherCondition("Clear Sky");
+                        day.setMaxTempC(30.0);
+                        day.setMinTempC(22.0);
+                        day.setRainProbability(0.10);
+                    }
 
                     List<Map<String, Object>> dayRecs = (i < optimizedDays.size()) ? optimizedDays.get(i)
                             : Collections.emptyList();
@@ -921,11 +939,13 @@ public class TripService {
             throw new RuntimeException("Day not found in this trip");
         }
 
+        // Normalize rain probability safely (handles 0.0-1.0 and 0-100 formats)
+        double normalizedProb = (rainProb != null && rainProb > 1.0) ? (rainProb / 100.0) : (rainProb != null ? rainProb : 0.0);
         targetDay.setWeatherCondition(weatherCondition);
-        targetDay.setRainProbability(rainProb);
-        targetDay.setMaxTempC(temp);
+        targetDay.setRainProbability(normalizedProb);
+        targetDay.setMaxTempC(temp != null ? temp : 28.0);
 
-        boolean needsAdaptation = rainProb > 0.40;
+        boolean needsAdaptation = normalizedProb >= 0.50;
 
         if (needsAdaptation) {
             java.util.List<ItineraryItem> newItems = new java.util.ArrayList<>();
@@ -1180,6 +1200,7 @@ public class TripService {
         Trip trip = getTripById(userEmail, tripId);
         ItineraryItem currentItem = null;
         ItineraryItem nextItem = null;
+        ItineraryDay nextDay = null;
         boolean currentFound = false;
 
         for (ItineraryDay day : trip.getDays()) {
@@ -1194,6 +1215,7 @@ public class TripService {
                 }
                 if (currentFound && !"COMPLETED".equals(item.getStatus()) && nextItem == null) {
                     nextItem = item;
+                    nextDay = day;
                     break;
                 }
             }
@@ -1222,23 +1244,70 @@ public class TripService {
         double destLon = nextItem.getLongitude() != null ? nextItem.getLongitude()
                 : (trip.getDestinationLongitude() != null ? trip.getDestinationLongitude() : 80.6480);
 
-        // Fetch Real Live Weather
-        Map<String, Object> weather = weatherService.getCurrentConditions(destLat, destLon);
-        double rainProb = weather.containsKey("rainProbability")
-                ? ((Number) weather.get("rainProbability")).doubleValue()
-                : 10.0;
-        double tempC = weather.containsKey("temperatureC") ? ((Number) weather.get("temperatureC")).doubleValue()
-                : 29.0;
-        String weatherDesc = weather.containsKey("weatherCondition") ? weather.get("weatherCondition").toString()
-                : "Clear Sky";
+        // Determine the planned date of the next activity
+        java.time.LocalDate activityDate = (nextDay != null) ? nextDay.getDate() : null;
+        if (activityDate == null && trip.getStartDate() != null && nextDay != null && nextDay.getDayNumber() != null) {
+            activityDate = trip.getStartDate().plusDays(nextDay.getDayNumber() - 1);
+        }
 
-        // Support simulated weather check for testing
-        if ("rain".equalsIgnoreCase(weatherOverride)) {
-            rainProb = 85.0;
-            weatherDesc = "Heavy Rain & Showers";
-        } else if ("clear".equalsIgnoreCase(weatherOverride)) {
-            rainProb = 5.0;
-            weatherDesc = "Clear / Sunny";
+        // Fetch Real Weather for Location and Planned Date without artificial overrides
+        Map<String, Object> weather = weatherService.getConditionsForLocationAndDate(destLat, destLon, activityDate);
+        boolean weatherAvailable = weather != null && Boolean.TRUE.equals(weather.get("isLive")) && weather.get("rainProbability") != null;
+
+        Double rainProb = weatherAvailable ? ((Number) weather.get("rainProbability")).doubleValue() : null;
+        Double tempC = weatherAvailable && weather.get("temperatureC") != null ? ((Number) weather.get("temperatureC")).doubleValue() : null;
+        String weatherDesc = weatherAvailable && weather.get("weatherCondition") != null ? weather.get("weatherCondition").toString() : "Forecast Unavailable";
+        Double precipMm = weatherAvailable && weather.get("precipitationMm") != null ? ((Number) weather.get("precipitationMm")).doubleValue() : null;
+        Double currentPrecipMm = weatherAvailable && weather.get("currentPrecipitationMm") != null ? ((Number) weather.get("currentPrecipitationMm")).doubleValue() : null;
+        Integer weatherCode = weatherAvailable && weather.get("weatherCode") != null ? ((Number) weather.get("weatherCode")).intValue() : null;
+
+        // Live Weather (Raw Open-Meteo readings, completely isolated from simulation)
+        Map<String, Object> liveConditions = new HashMap<>();
+        liveConditions.put("weather", weatherDesc);
+        liveConditions.put("temperature", tempC != null ? Math.round(tempC) + "°C" : "Unavailable");
+        liveConditions.put("temperatureC", tempC != null ? Math.round(tempC) : null);
+        liveConditions.put("rainProbability", rainProb != null ? Math.round(rainProb) + "%" : "Unavailable");
+        liveConditions.put("rainProbabilityNumeric", rainProb != null ? Math.round(rainProb) : null);
+        liveConditions.put("precipitationMm", precipMm);
+        liveConditions.put("currentPrecipitationMm", currentPrecipMm);
+        liveConditions.put("weatherAvailable", weatherAvailable);
+
+        // Support simulated weather check for testing - kept completely separate from live weather
+        boolean isSimulated = weatherOverride != null 
+                && !weatherOverride.isBlank() 
+                && !"live".equalsIgnoreCase(weatherOverride)
+                && !"actual".equalsIgnoreCase(weatherOverride)
+                && !"none".equalsIgnoreCase(weatherOverride)
+                && !"false".equalsIgnoreCase(weatherOverride);
+
+        Double activeRainProb = rainProb;
+        Double activePrecipMm = precipMm;
+        Double activeTempC = tempC;
+        Integer activeWeatherCode = weatherCode;
+        String activeWeatherDesc = weatherDesc;
+
+        Map<String, Object> simulatedConditions = null;
+        if (isSimulated) {
+            simulatedConditions = new HashMap<>();
+            if ("rain".equalsIgnoreCase(weatherOverride)) {
+                activeRainProb = 85.0;
+                activePrecipMm = 12.0;
+                activeTempC = (tempC != null) ? tempC : 26.0;
+                activeWeatherCode = 65;
+                activeWeatherDesc = "Heavy Rain & Showers (Simulated Test)";
+            } else if ("clear".equalsIgnoreCase(weatherOverride)) {
+                activeRainProb = 5.0;
+                activePrecipMm = 0.0;
+                activeTempC = (tempC != null) ? tempC : 29.0;
+                activeWeatherCode = 0;
+                activeWeatherDesc = "Clear / Sunny (Simulated Test)";
+            }
+            simulatedConditions.put("weather", activeWeatherDesc);
+            simulatedConditions.put("rainProbability", Math.round(activeRainProb) + "%");
+            simulatedConditions.put("rainProbabilityNumeric", Math.round(activeRainProb));
+            simulatedConditions.put("precipitationMm", activePrecipMm);
+            simulatedConditions.put("temperature", Math.round(activeTempC) + "°C");
+            simulatedConditions.put("scenario", weatherOverride);
         }
 
         // Distance & Travel Time Calculation from current to next
@@ -1268,16 +1337,23 @@ public class TripService {
                         ? nextItem.getOpeningHours()
                         : "Open today • Regular Hours";
 
-        // Suitability Evaluation
+        // Suitability Evaluation:
+        // Severe weather warnings trigger on high rain probability (>= 60%), heavy rainfall (>= 2.5mm),
+        // or storm conditions (WMO 65, 82, 95, 96, 99) when forecast data is available or simulated.
         boolean isOutdoor = "Outdoor".equalsIgnoreCase(nextItem.getIndoorOutdoor());
-        boolean isRainAdverse = rainProb >= 35.0 || weatherDesc.toLowerCase().contains("rain")
-                || weatherOverride != null;
-        boolean isSuitable = weatherOverride != null ? false : !(isOutdoor && isRainAdverse);
+        boolean isSevereWeather = false;
+        if ((weatherAvailable || isSimulated) && activeRainProb != null && activePrecipMm != null && activeWeatherCode != null) {
+            isSevereWeather = (activeRainProb >= 60.0) || (activePrecipMm >= 2.5) || (activeWeatherCode == 65 || activeWeatherCode == 82 || activeWeatherCode >= 95);
+        }
+        boolean isAdverseForOutdoor = isOutdoor && (isSevereWeather || isSimulated);
+        boolean isSuitable = !isAdverseForOutdoor;
 
         Map<String, Object> conditions = new HashMap<>();
-        conditions.put("weather", weatherDesc);
-        conditions.put("temperature", Math.round(tempC) + "°C");
-        conditions.put("rainProbability", Math.round(rainProb) + "%");
+        conditions.put("weather", activeWeatherDesc);
+        conditions.put("temperature", activeTempC != null ? Math.round(activeTempC) + "°C" : "Unavailable");
+        conditions.put("rainProbability", activeRainProb != null ? Math.round(activeRainProb) + "%" : "Unavailable");
+        conditions.put("precipitationMm", activePrecipMm);
+        conditions.put("currentPrecipitationMm", currentPrecipMm);
         conditions.put("traffic", trafficStatus);
         conditions.put("trafficDetail", trafficDetail);
         conditions.put("crowd", crowdStatus);
@@ -1286,9 +1362,15 @@ public class TripService {
         conditions.put("travelTimeMin", travelMin);
 
         response.put("conditions", conditions);
+        response.put("liveWeather", liveConditions);
+        response.put("simulatedWeather", simulatedConditions);
         response.put("isSuitable", isSuitable);
-        response.put("rainProbability", Math.round(rainProb));
-        response.put("temperatureC", Math.round(tempC));
+        response.put("rainProbability", activeRainProb != null ? Math.round(activeRainProb) : null);
+        response.put("precipitationMm", activePrecipMm);
+        response.put("currentPrecipitationMm", currentPrecipMm);
+        response.put("temperatureC", activeTempC != null ? Math.round(activeTempC) : null);
+        response.put("isSimulated", isSimulated);
+        response.put("weatherAvailable", weatherAvailable);
         response.put("trafficLevel", trafficStatus);
         response.put("crowdLevel", crowdStatus);
         response.put("openingStatus", openingStatus);
@@ -1296,13 +1378,34 @@ public class TripService {
         response.put("travelTimeEst", travelMin + " mins");
 
         if (!isSuitable) {
-            response.put("alertTitle", "⚠️ Conditions at your next destination have changed.");
-            String warningMsg = "Rain probability is elevated (" + Math.round(rainProb) + "%) and "
-                    + nextItem.getTitle() + " may be affected by adverse weather. Traffic is currently "
-                    + trafficStatus.toLowerCase() + ".";
+            response.put("alertTitle", isSimulated
+                    ? "🧪 Simulation Mode: Inclement Weather Alert"
+                    : "⚠️ Inclement Weather Alert at Next Destination");
+            String warningMsg;
+            if (isSimulated) {
+                warningMsg = "[SIMULATION TEST] Simulated adverse weather: " + activeWeatherDesc + " (" + Math.round(activeRainProb) + "% rain probability, " + activePrecipMm + " mm rainfall) at "
+                        + nextItem.getTitle() + ". Use this test scenario to verify adaptive itinerary recommendations.";
+            } else if (activeWeatherCode != null && (activeWeatherCode >= 95 || activeWeatherCode == 65 || activeWeatherCode == 82)) {
+                warningMsg = activeWeatherDesc + " with " + activePrecipMm + " mm rainfall (" + Math.round(activeRainProb) + "% rain probability) expected at "
+                        + nextItem.getTitle() + ". An indoor alternative is recommended.";
+            } else if (activePrecipMm != null && activePrecipMm >= 2.5) {
+                warningMsg = "Heavy rainfall (" + activePrecipMm + " mm, " + Math.round(activeRainProb) + "% rain probability) expected at "
+                        + nextItem.getTitle() + ". An indoor alternative is recommended.";
+            } else {
+                warningMsg = "Elevated precipitation probability (" + (activeRainProb != null ? Math.round(activeRainProb) : 0) + "%) and "
+                        + activeWeatherDesc.toLowerCase() + " expected at " + nextItem.getTitle()
+                        + ". An indoor alternative is recommended.";
+            }
             response.put("warning", warningMsg);
             response.put("alertMessage", warningMsg);
             response.put("userActionRequired", true);
+        } else if (weatherAvailable && activeRainProb != null && activeRainProb >= 35.0 && isOutdoor) {
+            response.put("alertTitle", "Next Activity Ready (Mild Weather Advisory)");
+            String advisoryMsg = "Passing cloud/light shower chance (" + Math.round(activeRainProb) + "%) at "
+                    + nextItem.getTitle() + ". Outdoor visit is on track; carrying an umbrella is recommended.";
+            response.put("warning", advisoryMsg);
+            response.put("alertMessage", advisoryMsg);
+            response.put("userActionRequired", false);
         } else {
             response.put("alertTitle", "Next Activity Ready");
             response.put("warning", null);

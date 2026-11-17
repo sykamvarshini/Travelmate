@@ -1,8 +1,12 @@
 export const weatherService = {
   getWeatherForecast: async (lat, lon) => {
     try {
-      // Open-Meteo free API
-      const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto`);
+      // Open-Meteo free API - 16-day forecast with precipitation probability max, precipitation sum, weather codes and current conditions
+      const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weather_code,weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum&current=temperature_2m,precipitation,weather_code&forecast_days=16&timezone=Asia/Kolkata`);
+      if (!response.ok) {
+        console.warn(`Open-Meteo API returned status: ${response.status}`);
+        return null;
+      }
       const data = await response.json();
       return data;
     } catch (error) {
