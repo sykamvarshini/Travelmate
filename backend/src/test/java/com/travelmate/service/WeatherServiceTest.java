@@ -2,7 +2,10 @@ package com.travelmate.service;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.http.HttpHeaders;
@@ -535,6 +538,68 @@ public class WeatherServiceTest {
         assertEquals("Live weather temporarily unavailable — showing cached forecast.", stale.get("forecastMessage"));
         assertEquals(staleTimestamp, stale.get("forecastTimestamp"));
         assertSame(body.get("daily"), stale.get("daily"));
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void diagnosticsLogCacheSourcesAndOutboundRequestCount(CapturedOutput output) {
+        when(restTemplate.exchange(
+                anyString(),
+                eq(HttpMethod.GET),
+                isNull(),
+                ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any()
+        )).thenReturn(ResponseEntity.ok(createTwoDayForecast()));
+
+        weatherService.getWeatherForecast(15.4925, 73.7737);
+        weatherService.getWeatherForecast(15.4925, 73.7737);
+
+        Map<?, ?> cache = (Map<?, ?>) ReflectionTestUtils.getField(weatherService, "weatherCache");
+        Object cachedEntry = cache.get("15.49_73.77");
+        ReflectionTestUtils.setField(cachedEntry, "timestamp", System.currentTimeMillis() - TimeUnit.HOURS.toMillis(7));
+        ((java.util.concurrent.atomic.AtomicLong) ReflectionTestUtils.getField(weatherService, "rateLimitUntilMillis"))
+                .set(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(1));
+        Map<String, Object> stale = weatherService.getWeatherForecast(15.4925, 73.7737);
+
+        assertTrue((Boolean) stale.get("isStale"));
+        assertTrue(output.getAll().contains("event=cache_miss"));
+        assertTrue(output.getAll().contains("event=outbound_request"));
+        assertTrue(output.getAll().contains("requestCount=1"));
+        assertTrue(output.getAll().contains("status=200 source=upstream_api"));
+        assertTrue(output.getAll().contains("source=fresh_cache"));
+        assertTrue(output.getAll().contains("source=stale_cache"));
+        assertTrue(output.getAll().contains("coordinates=15.49_73.77"));
+        assertTrue(output.getAll().contains("event=request_suppressed reason=cooldown"));
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void rateLimitDiagnosticsIncludeSafeHeadersAndRedactedResponseBody(CapturedOutput output) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.RETRY_AFTER, "120");
+        headers.set("X-RateLimit-Remaining", "0");
+        String responseBody = "{\"error\":\"quota exceeded\",\"api_key\":\"never-log-this-secret\"}";
+        HttpClientErrorException rateLimit = HttpClientErrorException.create(
+                HttpStatus.TOO_MANY_REQUESTS, "Too Many Requests", headers,
+                responseBody.getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8);
+        when(restTemplate.exchange(
+                anyString(),
+                eq(HttpMethod.GET),
+                isNull(),
+                ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any()
+        )).thenThrow(rateLimit);
+
+        Map<String, Object> unavailable = weatherService.getWeatherForecast(15.4925, 73.7737);
+
+        assertFalse((Boolean) unavailable.get("isAvailable"));
+        assertTrue(output.getAll().contains("event=upstream_rate_limited"));
+        assertTrue(output.getAll().contains("status=429"));
+        assertTrue(output.getAll().contains("rateLimitResponseCount=1"));
+        assertTrue(output.getAll().contains("retryAfter=120"));
+        assertTrue(output.getAll().contains("X-RateLimit-Remaining=0"));
+        assertTrue(output.getAll().contains("cooldownRemainingMs="));
+        assertTrue(output.getAll().contains("quota exceeded"));
+        assertFalse(output.getAll().contains("never-log-this-secret"));
+        assertTrue(output.getAll().contains("[REDACTED]"));
     }
 
     @Test

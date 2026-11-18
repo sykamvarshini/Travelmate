@@ -8,6 +8,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -23,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -32,6 +34,9 @@ import java.util.concurrent.atomic.AtomicLong;
 public class WeatherService {
 
     private static final Logger log = LoggerFactory.getLogger(WeatherService.class);
+    private static final String INSTANCE_ID = resolveInstanceId();
+    private static final long PROCESS_ID = ProcessHandle.current().pid();
+    private static final String PROCESS_START_ID = UUID.randomUUID().toString();
 
     @Value("${app.external-apis.open-meteo.base-url:https://api.open-meteo.com/v1/forecast}")
     private String openMeteoBaseUrl;
@@ -54,6 +59,8 @@ public class WeatherService {
     private final AtomicLong rateLimitUntilMillis = new AtomicLong();
     private final AtomicLong nextRequestAllowedMillis = new AtomicLong();
     private final AtomicLong failureBackoffMillis = new AtomicLong(Duration.ofSeconds(2).toMillis());
+    private final AtomicLong outboundRequestCount = new AtomicLong();
+    private final AtomicLong rateLimitResponseCount = new AtomicLong();
     private static final long CACHE_TTL_MS = Duration.ofHours(6).toMillis();
     private static final long MAX_STALE_CACHE_AGE_MS = Duration.ofHours(24).toMillis();
     private static final long MIN_REQUEST_INTERVAL_MS = Duration.ofSeconds(1).toMillis();
@@ -62,6 +69,8 @@ public class WeatherService {
 
     public WeatherService(RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
+        log.info("weather.diagnostic event=service_started instanceId={} processId={} processStartId={}",
+                INSTANCE_ID, PROCESS_ID, PROCESS_START_ID);
     }
 
     /**
@@ -76,8 +85,15 @@ public class WeatherService {
             usingStaleForecast = cached != null
                     && System.currentTimeMillis() - cached.timestamp < MAX_STALE_CACHE_AGE_MS;
             response = usingStaleForecast ? cached.data : null;
+            if (usingStaleForecast) {
+                log.info("weather.diagnostic event=forecast_returned source=stale_cache instanceId={} processId={} processStartId={} coordinates={} forecastAgeMs={} cooldownRemainingMs={}",
+                        INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey,
+                        System.currentTimeMillis() - cached.timestamp, cooldownRemainingMillis());
+            }
         }
         if (response == null) {
+            log.info("weather.diagnostic event=forecast_returned source=unavailable instanceId={} processId={} processStartId={} coordinates={} cooldownRemainingMs={}",
+                    INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey, cooldownRemainingMillis());
             return createUnavailableForecast();
         }
 
@@ -118,8 +134,13 @@ public class WeatherService {
         String conditionsKey = cacheKey + ":" + forecastDate;
         CacheEntry cachedConditions = conditionsCache.get(conditionsKey);
         if (cachedConditions != null && System.currentTimeMillis() - cachedConditions.timestamp < CACHE_TTL_MS) {
+            log.info("weather.diagnostic event=cache_hit cache=conditions source=fresh_cache instanceId={} processId={} processStartId={} coordinates={} cacheAgeMs={}",
+                    INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey,
+                    System.currentTimeMillis() - cachedConditions.timestamp);
             return new HashMap<>(cachedConditions.data);
         }
+        log.info("weather.diagnostic event=cache_miss cache=conditions instanceId={} processId={} processStartId={} coordinates={}",
+                INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey);
 
         CacheEntry previous = weatherCache.get(cacheKey);
         Map<String, Object> response = loadForecast(lat, lon);
@@ -138,6 +159,10 @@ public class WeatherService {
                     result.put("isStale", true);
                     result.put("isLive", false);
                     result.put("forecastMessage", "Live weather temporarily unavailable — showing cached forecast.");
+                    log.info("weather.diagnostic event=forecast_returned source=stale_cache instanceId={} processId={} processStartId={} coordinates={} forecastAgeMs={} cooldownRemainingMs={}",
+                            INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey,
+                            forecastEntry != null ? System.currentTimeMillis() - forecastEntry.timestamp : -1,
+                            cooldownRemainingMillis());
                 } else {
                     conditionsCache.put(conditionsKey, new CacheEntry(new HashMap<>(result), System.currentTimeMillis()));
                 }
@@ -145,6 +170,8 @@ public class WeatherService {
             }
         }
 
+        log.info("weather.diagnostic event=forecast_returned source=unavailable instanceId={} processId={} processStartId={} coordinates={} cooldownRemainingMs={}",
+                INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey, cooldownRemainingMillis());
         return createUnavailableConditions(targetDate, "Forecast Temporarily Unavailable");
     }
 
@@ -153,21 +180,37 @@ public class WeatherService {
         String cacheKey = coordinateKey(lat, lon);
         CacheEntry cached = weatherCache.get(cacheKey);
         if (cached != null && System.currentTimeMillis() - cached.timestamp < CACHE_TTL_MS) {
+            log.info("weather.diagnostic event=cache_hit cache=forecast source=fresh_cache instanceId={} processId={} processStartId={} coordinates={} cacheAgeMs={}",
+                    INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey,
+                    System.currentTimeMillis() - cached.timestamp);
             return cached.data;
         }
 
-        if (System.currentTimeMillis() < rateLimitUntilMillis.get()) {
+        long cooldownRemaining = cooldownRemainingMillis();
+        log.info("weather.diagnostic event=cache_miss cache=forecast instanceId={} processId={} processStartId={} coordinates={} staleEntryPresent={} staleEntryAgeMs={} cooldownRemainingMs={}",
+                INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey,
+                cached != null,
+                cached != null ? System.currentTimeMillis() - cached.timestamp : -1,
+                cooldownRemaining);
+        if (cooldownRemaining > 0) {
+            log.info("weather.diagnostic event=request_suppressed reason=cooldown instanceId={} processId={} processStartId={} coordinates={} cooldownRemainingMs={}",
+                    INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey, cooldownRemaining);
             return null;
         }
 
         CompletableFuture<Map<String, Object>> request = new CompletableFuture<>();
         CompletableFuture<Map<String, Object>> existing = inFlightForecasts.putIfAbsent(cacheKey, request);
         if (existing != null) {
+            log.info("weather.diagnostic event=request_deduplicated instanceId={} processId={} processStartId={} coordinates={}",
+                    INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey);
             return existing.join();
         }
         if (!reserveRequestSlot()) {
             inFlightForecasts.remove(cacheKey, request);
             request.complete(null);
+            long waitMillis = Math.max(0, nextRequestAllowedMillis.get() - System.currentTimeMillis());
+            log.info("weather.diagnostic event=request_suppressed reason=minimum_interval instanceId={} processId={} processStartId={} coordinates={} waitMs={}",
+                    INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey, waitMillis);
             return null;
         }
 
@@ -184,6 +227,9 @@ public class WeatherService {
                     .queryParam("timezone", "Asia/Kolkata")
                     .toUriString();
 
+            long requestCount = outboundRequestCount.incrementAndGet();
+            log.info("weather.diagnostic event=outbound_request instanceId={} processId={} processStartId={} coordinates={} requestCount={} cooldownRemainingMs=0",
+                    INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey, requestCount);
             ResponseEntity<Map<String, Object>> responseEntity = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -191,6 +237,10 @@ public class WeatherService {
                     new ParameterizedTypeReference<Map<String, Object>>() {}
             );
             Map<String, Object> body = responseEntity.getBody();
+            log.info("weather.diagnostic event=upstream_response instanceId={} processId={} processStartId={} coordinates={} status={} source=upstream_api result={}",
+                    INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey,
+                    responseEntity.getStatusCode().value(),
+                    body != null && !body.isEmpty() ? "cached" : "empty_body");
             if (body != null && !body.isEmpty()) {
                 result = new HashMap<>(body);
                 weatherCache.put(cacheKey, new CacheEntry(result, System.currentTimeMillis()));
@@ -198,10 +248,24 @@ public class WeatherService {
             }
         } catch (HttpClientErrorException.TooManyRequests e) {
             applyRateLimit(e.getResponseHeaders());
-            log.warn("Open-Meteo rate limit reached; suppressing forecast requests until cooldown expires.");
+            long rateLimitCount = rateLimitResponseCount.incrementAndGet();
+            log.warn("weather.diagnostic event=upstream_rate_limited instanceId={} processId={} processStartId={} coordinates={} status={} rateLimitResponseCount={} retryAfter={} rateLimitHeaders={} responseBody={} cooldownRemainingMs={}",
+                    INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey, e.getStatusCode().value(),
+                    rateLimitCount, sanitizeLogValue(e.getResponseHeaders() != null
+                            ? e.getResponseHeaders().getFirst(HttpHeaders.RETRY_AFTER) : null),
+                    rateLimitHeaders(e.getResponseHeaders()),
+                    sanitizeErrorBody(e.getResponseBodyAsString()), cooldownRemainingMillis());
+        } catch (HttpStatusCodeException e) {
+            applyFailureBackoff();
+            log.warn("weather.diagnostic event=upstream_http_error instanceId={} processId={} processStartId={} coordinates={} status={} responseHeaders={} responseBody={} cooldownRemainingMs={}",
+                    INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey, e.getStatusCode().value(),
+                    rateLimitHeaders(e.getResponseHeaders()), sanitizeErrorBody(e.getResponseBodyAsString()),
+                    cooldownRemainingMillis());
         } catch (Exception e) {
             applyFailureBackoff();
-            log.warn("Open-Meteo weather fetch failed for ({}, {}): {}", lat, lon, e.getMessage());
+            log.warn("weather.diagnostic event=upstream_request_failed instanceId={} processId={} processStartId={} coordinates={} exceptionType={} message={} cooldownRemainingMs={}",
+                    INSTANCE_ID, PROCESS_ID, PROCESS_START_ID, cacheKey, e.getClass().getSimpleName(),
+                    sanitizeErrorBody(e.getMessage()), cooldownRemainingMillis());
         } finally {
             request.complete(result);
             inFlightForecasts.remove(cacheKey, request);
@@ -225,6 +289,61 @@ public class WeatherService {
 
     private static String coordinateKey(double lat, double lon) {
         return String.format(Locale.US, "%.2f_%.2f", normalizeCoordinate(lat), normalizeCoordinate(lon));
+    }
+
+    private static String resolveInstanceId() {
+        String instanceId = System.getenv("RENDER_INSTANCE_ID");
+        if (instanceId == null || instanceId.isBlank()) {
+            return "not-set";
+        }
+        String safeInstanceId = instanceId.replaceAll("[^A-Za-z0-9._-]", "_");
+        return safeInstanceId.substring(0, Math.min(safeInstanceId.length(), 80));
+    }
+
+    private long cooldownRemainingMillis() {
+        return Math.max(0, rateLimitUntilMillis.get() - System.currentTimeMillis());
+    }
+
+    private static String rateLimitHeaders(@Nullable HttpHeaders headers) {
+        if (headers == null || headers.isEmpty()) {
+            return "none";
+        }
+        Map<String, String> selectedHeaders = new HashMap<>();
+        headers.forEach((name, values) -> {
+            String lowerName = name.toLowerCase(Locale.ROOT);
+            if (lowerName.equals("retry-after")
+                    || lowerName.startsWith("ratelimit-")
+                    || lowerName.equals("ratelimit")
+                    || lowerName.startsWith("x-ratelimit-")) {
+                selectedHeaders.put(name, values == null || values.isEmpty()
+                        ? "" : sanitizeLogValue(values.get(0)));
+            }
+        });
+        return selectedHeaders.isEmpty() ? "none" : selectedHeaders.toString();
+    }
+
+    private static String sanitizeErrorBody(@Nullable String body) {
+        if (body == null || body.isBlank()) {
+            return "none";
+        }
+        String sanitized = body.replaceAll("[\\p{Cntrl}&&[^\\t]]", " ")
+                .replaceAll("(?i)Bearer\\s+[^\\s,;]+", "Bearer [REDACTED]")
+                .replaceAll("(?i)(\"?(?:authorization|api[_-]?key|access[_-]?token|token|password|secret|jwt)\"?\\s*[:=]\\s*\"?)[^\",\\s}]+",
+                        "$1[REDACTED]")
+                .replaceAll("(?i)([?&](?:key|api_key|token|access_token|authorization|password)=)[^&\\s]+",
+                        "$1[REDACTED]")
+                .replaceAll("[\\r\\n]+", " ")
+                .trim();
+        return sanitized.length() <= 512 ? sanitized : sanitized.substring(0, 512) + "...";
+    }
+
+    @Nullable
+    private static String sanitizeLogValue(@Nullable String value) {
+        if (value == null) {
+            return null;
+        }
+        String sanitized = value.replaceAll("[\\p{Cntrl}]", " ").trim();
+        return sanitized.length() <= 256 ? sanitized : sanitized.substring(0, 256) + "...";
     }
 
     private static double normalizeCoordinate(double coordinate) {
