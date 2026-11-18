@@ -1290,6 +1290,7 @@ public class TripService {
         liveConditions.put("weatherAvailable", weatherAvailable);
         liveConditions.put("forecastMessage", weather != null ? weather.get("forecastMessage") : "Live weather temporarily unavailable");
         liveConditions.put("isStale", weather != null && Boolean.TRUE.equals(weather.get("isStale")));
+        liveConditions.put("forecastTimestamp", weather != null ? weather.get("forecastTimestamp") : null);
 
         // Support simulated weather check for testing - kept completely separate from live weather
         boolean isSimulated = weatherOverride != null 

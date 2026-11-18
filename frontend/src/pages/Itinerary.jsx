@@ -449,12 +449,14 @@ const Itinerary = () => {
         // 4. Fetch Real Weather Forecast (Consistent coordinates and forecast periods)
         if (destCoords) {
           try {
-            const updatedDays = await Promise.all(data.days.map(async (day, idx) => {
+            const updatedDays = await Promise.all(data.days.map(async (day) => {
               // Target coordinates for this day's planned activities (using primary activity or destination)
               const targetCoords = destCoords;
-              const dayDateStr = day.date ? (typeof day.date === 'string' ? day.date.split('T')[0] : '') : '';
-              const weatherData = await weatherService.getWeatherForecast(targetCoords[0], targetCoords[1], dayDateStr || null);
-              if (weatherData && weatherData.daily && weatherData.daily.time) {
+              const dayDateStr = day.date instanceof Date
+                ? `${day.date.getFullYear()}-${String(day.date.getMonth() + 1).padStart(2, '0')}-${String(day.date.getDate()).padStart(2, '0')}`
+                : (typeof day.date === 'string' ? day.date.split('T')[0] : '');
+              const weatherData = await weatherService.getWeatherForecast(targetCoords[0], targetCoords[1]);
+              if (weatherData?.isAvailable !== false && weatherData?.daily && weatherData.daily.time) {
                 const times = weatherData.daily.time;
                 const codes = weatherData.daily.weather_code || weatherData.daily.weathercode || [];
                 const maxTemps = weatherData.daily.temperature_2m_max || [];
@@ -467,11 +469,6 @@ const Itinerary = () => {
                   wIdx = times.findIndex(t => t === dayDateStr);
                 }
                 
-                // If date was not matched (e.g. day within 16-day window starting today)
-                if (wIdx === -1 && idx < times.length && (!dayDateStr || dayDateStr < times[0])) {
-                  wIdx = Math.min(idx, times.length - 1);
-                }
-
                 // If date is beyond available forecast horizon (> 16 days), show unavailable rather than inventing fake numbers
                 if (wIdx === -1) {
                   return {
@@ -485,41 +482,78 @@ const Itinerary = () => {
                   };
                 }
 
-                const temp = maxTemps[wIdx] != null ? Math.round(maxTemps[wIdx]) : null;
-                const code = codes[wIdx] != null ? codes[wIdx] : null;
-                const rainProb = rainProbs[wIdx] != null ? Math.round(rainProbs[wIdx]) : null;
-                const precipSum = precipSums[wIdx] != null ? Number(precipSums[wIdx]) : null;
+                const finiteValue = (value) => {
+                  if (value == null) return null;
+                  const parsed = Number(value);
+                  return Number.isFinite(parsed) ? parsed : null;
+                };
+                const tempValue = finiteValue(maxTemps[wIdx]);
+                const temp = tempValue == null ? null : Math.round(tempValue);
+                const code = finiteValue(codes[wIdx]);
+                const rainValue = finiteValue(rainProbs[wIdx]);
+                const rainProb = rainValue == null ? null : Math.round(rainValue);
+                const precipSum = finiteValue(precipSums[wIdx]);
+
+                if (![temp, code, rainProb, precipSum].some(value => value != null && Number.isFinite(value))) {
+                  return {
+                    ...day,
+                    weather: "Live weather temporarily unavailable",
+                    rainProbability: null,
+                    precipitationMm: null,
+                    isWeatherUnavailable: true,
+                    hasWeatherAlert: false,
+                    weatherAlertText: null
+                  };
+                }
                 
                 // Comprehensive WMO Weather Code Mapping
-                let condition = code == null ? "Live weather temporarily unavailable" : "Clear Sky";
-                if (code === 1) condition = "Mainly Clear";
-                else if (code === 2) condition = "Partly Cloudy";
-                else if (code === 3) condition = "Overcast";
-                else if (code === 45 || code === 48) condition = "Foggy";
-                else if (code === 51) condition = "Light Drizzle";
-                else if (code === 53) condition = "Moderate Drizzle";
-                else if (code === 55) condition = "Dense Drizzle";
-                else if (code === 56 || code === 57) condition = "Freezing Drizzle";
-                else if (code === 61) condition = "Slight Rain";
-                else if (code === 63) condition = "Moderate Rain";
-                else if (code === 65) condition = "Heavy Rain";
-                else if (code === 71 || code === 73 || code === 75) condition = "Snowy";
-                else if (code === 80) condition = "Passing Showers";
-                else if (code === 81) condition = "Rain Showers";
-                else if (code === 82) condition = "Violent Showers";
-                else if (code >= 95) condition = "Thunderstorm";
+                const weatherDescriptions = {
+                  0: "Clear Sky",
+                  1: "Mainly Clear",
+                  2: "Partly Cloudy",
+                  3: "Overcast",
+                  45: "Foggy",
+                  48: "Foggy",
+                  51: "Light Drizzle",
+                  53: "Moderate Drizzle",
+                  55: "Dense Drizzle",
+                  56: "Freezing Drizzle",
+                  57: "Freezing Drizzle",
+                  61: "Slight Rain",
+                  63: "Moderate Rain",
+                  65: "Heavy Rain",
+                  71: "Slight Snow",
+                  73: "Moderate Snow",
+                  75: "Heavy Snow",
+                  80: "Passing Showers",
+                  81: "Rain Showers",
+                  82: "Violent Showers",
+                  95: "Thunderstorm",
+                  96: "Thunderstorm with Hail",
+                  99: "Thunderstorm with Hail"
+                };
+                const condition = code != null
+                  ? weatherDescriptions[code] || "Weather condition unavailable"
+                  : "Weather condition unavailable";
 
                 // Severe weather detection matches backend: rainProb >= 60%, code 65/82/95+, or precipSum >= 5.0 with rainProb >= 50%
                 const isSevereRain = (rainProb != null && rainProb >= 60) || 
-                                     (code >= 95) || (code === 65 || code === 82) || 
+                                     (code != null && (code >= 95 || code === 65 || code === 82)) ||
                                      (precipSum != null && precipSum >= 5.0 && rainProb != null && rainProb >= 50);
+                const forecastFetchedAt = weatherData.forecastTimestamp != null
+                  ? new Date(weatherData.forecastTimestamp).toLocaleString()
+                  : null;
                 
                 return {
                   ...day,
-                  weather: `${condition}${temp != null ? `, ${temp}°C` : ''}${weatherData.forecastMessage ? ' — Live weather temporarily unavailable (showing cached forecast)' : ''}`,
+                  weather: `${condition}${temp != null ? `, ${temp}°C` : ''}${weatherData.isStale
+                    ? ` — Cached forecast${forecastFetchedAt ? ` from ${forecastFetchedAt}` : ' (stale)'}`
+                    : ''}`,
                   rainProbability: rainProb,
                   precipitationMm: precipSum,
                   isWeatherUnavailable: false,
+                  isWeatherStale: Boolean(weatherData.isStale),
+                  weatherForecastTimestamp: weatherData.forecastTimestamp ?? null,
                   hasWeatherAlert: isSevereRain,
                   weatherAlertText: isSevereRain 
                     ? `Inclement weather expected (${condition}${rainProb != null ? `, ${rainProb}% rain chance` : ''}${precipSum != null ? `, ${precipSum} mm` : ''}). Consider indoor activities.`
@@ -647,9 +681,11 @@ const Itinerary = () => {
       const actId = activityId || nextActivity?.id || (trip?.days?.[0]?.activities?.[0]?.id);
       const checkRes = await tripService.checkNextActivity(trip.id, actId, 'live');
       setNextDestinationCheck(checkRes);
-      if (checkRes.isSuitable) {
+      if (!checkRes.weatherAvailable) {
+        showToast('Live weather is unavailable. No conditions could be verified.');
+      } else if (checkRes.isSuitable) {
         setShowNextConditionAlert(false);
-        showToast(`✓ Switched to live weather. Next destination (${checkRes.nextActivityTitle}) is clear!`);
+        showToast(`✓ Live forecast checked. No severe weather alert for ${checkRes.nextActivityTitle}.`);
       } else {
         showToast('✓ Switched to actual live meteorological forecast.');
       }
@@ -2277,9 +2313,15 @@ const Itinerary = () => {
                 <AlertTriangle size={24} className="warning-icon" />
               </div>
               <div>
-                <h3>{nextDestinationCheck.isSimulated ? '🧪 Test Simulation: Adverse Weather Alert' : '⚠️ Conditions at your next destination have changed'}</h3>
+                <h3>{nextDestinationCheck.isSimulated
+                  ? '🧪 Test Simulation: Adverse Weather Alert'
+                  : (!nextDestinationCheck.weatherAvailable
+                    ? 'Live weather unavailable'
+                    : '⚠️ Weather conditions at your next destination')}</h3>
                 <p>
-                  Your next activity (<strong>{nextDestinationCheck.nextActivityTitle}</strong>) may be affected by {nextDestinationCheck.isSimulated ? 'a simulated test scenario' : 'current forecast conditions'}
+                  {nextDestinationCheck.weatherAvailable || nextDestinationCheck.isSimulated
+                    ? <>Your next activity (<strong>{nextDestinationCheck.nextActivityTitle}</strong>) may be affected by {nextDestinationCheck.isSimulated ? 'a simulated test scenario' : 'the forecast conditions'}</>
+                    : <>A forecast could not be verified for <strong>{nextDestinationCheck.nextActivityTitle}</strong>. No weather alert is being issued.</>}
                   {nextDestinationCheck.isSimulated && <span className="simulated-badge" style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: '12px', fontWeight: '700', border: '1px solid #f59e0b' }}>Simulated Test Mode</span>}.
                 </p>
               </div>
@@ -2307,7 +2349,11 @@ const Itinerary = () => {
 
             {nextDestinationCheck.liveWeather?.forecastMessage && (
               <div style={{ margin: '0 0 12px', color: '#92400e', fontSize: '0.8rem' }}>
-                Live weather temporarily unavailable{nextDestinationCheck.liveWeather.weatherAvailable ? ' — showing the last valid cached forecast.' : ''}
+                Live weather temporarily unavailable{nextDestinationCheck.liveWeather.weatherAvailable
+                  ? ` — showing the last valid cached forecast${nextDestinationCheck.liveWeather.forecastTimestamp
+                    ? ` from ${new Date(nextDestinationCheck.liveWeather.forecastTimestamp).toLocaleString()}`
+                    : ''}.`
+                  : ''}
               </div>
             )}
 
@@ -2378,7 +2424,7 @@ const Itinerary = () => {
                 <Sun size={20} />
                 <div>
                   <span className="metric-label">Temperature</span>
-                  <strong>{nextDestinationCheck.temperatureC ? `${nextDestinationCheck.temperatureC}°C` : 'Normal'}</strong>
+                  <strong>{nextDestinationCheck.temperatureC != null ? `${nextDestinationCheck.temperatureC}°C` : 'Unavailable'}</strong>
                 </div>
               </div>
 
@@ -2481,17 +2527,22 @@ const Itinerary = () => {
               </button>
 
               {nextAlternatives.length === 0 && (
-                <button 
-                  className="btn-modal-primary"
-                  onClick={() => handleFetchNextAlternatives(nextDestinationCheck.nextActivityId)}
-                  disabled={loadingNextAlternatives}
-                >
-                  {loadingNextAlternatives ? (
-                    <><RefreshCw size={14} className="spin" /> Finding Real Alternatives...</>
-                  ) : (
-                    '[Show Alternatives]'
+                <>
+                  {!nextDestinationCheck.weatherAvailable && !nextDestinationCheck.isSimulated && (
+                    <span className="no-alts-msg">Alternatives for a weather concern require an available forecast.</span>
                   )}
-                </button>
+                  <button
+                    className="btn-modal-primary"
+                    onClick={() => handleFetchNextAlternatives(nextDestinationCheck.nextActivityId)}
+                    disabled={loadingNextAlternatives || (!nextDestinationCheck.weatherAvailable && !nextDestinationCheck.isSimulated)}
+                  >
+                    {loadingNextAlternatives ? (
+                      <><RefreshCw size={14} className="spin" /> Finding Real Alternatives...</>
+                    ) : (
+                      '[Show Alternatives]'
+                    )}
+                  </button>
+                </>
               )}
             </div>
           </div>

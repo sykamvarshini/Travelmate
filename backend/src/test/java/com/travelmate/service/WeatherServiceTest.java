@@ -10,9 +10,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
+import java.net.SocketTimeoutException;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
@@ -248,6 +250,48 @@ public class WeatherServiceTest {
     }
 
     @Test
+    void requestedDateMissingFromForecastIsUnavailableRatherThanUsingAnotherDay() {
+        Map<String, Object> body = createTwoDayForecast();
+        when(restTemplate.exchange(
+                anyString(),
+                eq(HttpMethod.GET),
+                isNull(),
+                ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any()
+        )).thenReturn(ResponseEntity.ok(body));
+
+        LocalDate unavailableDate = LocalDate.now().plusDays(3);
+        Map<String, Object> result = weatherService.getConditionsForLocationAndDate(
+                15.4925, 73.7737, unavailableDate);
+
+        assertFalse((Boolean) result.get("isAvailable"));
+        assertNull(result.get("rainProbability"));
+        assertNull(result.get("temperatureC"));
+        assertNull(result.get("weatherCode"));
+        assertEquals(unavailableDate.toString(), result.get("forecastDate"));
+    }
+
+    @Test
+    void matchedForecastDateWithNoWeatherValuesIsUnavailable() {
+        Map<String, Object> body = new HashMap<>();
+        Map<String, Object> daily = new HashMap<>();
+        daily.put("time", List.of(LocalDate.now().toString()));
+        body.put("daily", daily);
+        when(restTemplate.exchange(
+                anyString(),
+                eq(HttpMethod.GET),
+                isNull(),
+                ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any()
+        )).thenReturn(ResponseEntity.ok(body));
+
+        Map<String, Object> result = weatherService.getCurrentConditions(15.4925, 73.7737);
+
+        assertFalse((Boolean) result.get("isAvailable"));
+        assertNull(result.get("temperatureC"));
+        assertNull(result.get("rainProbability"));
+        assertNull(result.get("weatherCode"));
+    }
+
+    @Test
     void testGetConditionsForLocationAndDate_UnavailableForDistantFutureBeyond16Days() {
         LocalDate farFuture = LocalDate.now().plusDays(45);
 
@@ -434,6 +478,112 @@ public class WeatherServiceTest {
 
         assertEquals(15.0, first.get("rainProbability"));
         assertEquals(70.0, second.get("rainProbability"));
+        verify(restTemplate, times(1)).exchange(
+                anyString(),
+                eq(HttpMethod.GET),
+                isNull(),
+                ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any()
+        );
+    }
+
+    @Test
+    void getWeatherForecastReturnsCachedForecastWithoutAnotherRequest() {
+        Map<String, Object> body = createTwoDayForecast();
+        when(restTemplate.exchange(
+                anyString(),
+                eq(HttpMethod.GET),
+                isNull(),
+                ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any()
+        )).thenReturn(ResponseEntity.ok(body));
+
+        Map<String, Object> first = weatherService.getWeatherForecast(15.4925, 73.7737);
+        Map<String, Object> second = weatherService.getWeatherForecast(15.4930, 73.7729);
+
+        assertTrue((Boolean) first.get("isAvailable"));
+        assertFalse((Boolean) first.get("isStale"));
+        assertSame(body.get("daily"), second.get("daily"));
+        verify(restTemplate, times(1)).exchange(
+                anyString(),
+                eq(HttpMethod.GET),
+                isNull(),
+                ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any()
+        );
+    }
+
+    @Test
+    void getWeatherForecastClearlyMarksStaleCachedData() {
+        Map<String, Object> body = createTwoDayForecast();
+        when(restTemplate.exchange(
+                anyString(),
+                eq(HttpMethod.GET),
+                isNull(),
+                ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any()
+        )).thenReturn(ResponseEntity.ok(body));
+        weatherService.getWeatherForecast(19.123, 80.234);
+
+        Map<?, ?> cache = (Map<?, ?>) ReflectionTestUtils.getField(weatherService, "weatherCache");
+        Object cachedEntry = cache.get("19.12_80.23");
+        long staleTimestamp = System.currentTimeMillis() - TimeUnit.HOURS.toMillis(7);
+        ReflectionTestUtils.setField(cachedEntry, "timestamp", staleTimestamp);
+        ((java.util.concurrent.atomic.AtomicLong) ReflectionTestUtils.getField(weatherService, "rateLimitUntilMillis"))
+                .set(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(1));
+
+        Map<String, Object> stale = weatherService.getWeatherForecast(19.123, 80.234);
+
+        assertTrue((Boolean) stale.get("isAvailable"));
+        assertTrue((Boolean) stale.get("isStale"));
+        assertEquals("Live weather temporarily unavailable — showing cached forecast.", stale.get("forecastMessage"));
+        assertEquals(staleTimestamp, stale.get("forecastTimestamp"));
+        assertSame(body.get("daily"), stale.get("daily"));
+    }
+
+    @Test
+    void rateLimitHonorsRetryAfterAndSuppressesRequestsDuringCooldown() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.RETRY_AFTER, "120");
+        HttpClientErrorException rateLimit = HttpClientErrorException.create(
+                HttpStatus.TOO_MANY_REQUESTS, "Too Many Requests", headers, new byte[0], StandardCharsets.UTF_8);
+        when(restTemplate.exchange(
+                anyString(),
+                eq(HttpMethod.GET),
+                isNull(),
+                ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any()
+        )).thenThrow(rateLimit);
+
+        long beforeRequest = System.currentTimeMillis();
+        Map<String, Object> first = weatherService.getCurrentConditions(19.123, 80.234);
+        Map<String, Object> second = weatherService.getCurrentConditions(19.123, 80.234);
+        long cooldownUntil = ((java.util.concurrent.atomic.AtomicLong) ReflectionTestUtils
+                .getField(weatherService, "rateLimitUntilMillis")).get();
+
+        assertFalse((Boolean) first.get("isAvailable"));
+        assertFalse((Boolean) second.get("isAvailable"));
+        assertTrue(cooldownUntil >= beforeRequest + TimeUnit.SECONDS.toMillis(110));
+        verify(restTemplate, times(1)).exchange(
+                anyString(),
+                eq(HttpMethod.GET),
+                isNull(),
+                ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any()
+        );
+    }
+
+    @Test
+    void timeoutReturnsUnavailableAndUsesBackoffToSuppressImmediateRetry() {
+        when(restTemplate.exchange(
+                anyString(),
+                eq(HttpMethod.GET),
+                isNull(),
+                ArgumentMatchers.<ParameterizedTypeReference<Map<String, Object>>>any()
+        )).thenThrow(new ResourceAccessException("Weather request timed out", new SocketTimeoutException("read timed out")));
+
+        Map<String, Object> first = weatherService.getCurrentConditions(19.123, 80.234);
+        Map<String, Object> second = weatherService.getCurrentConditions(19.123, 80.234);
+
+        assertFalse((Boolean) first.get("isAvailable"));
+        assertEquals("Forecast Temporarily Unavailable", first.get("weatherCondition"));
+        assertNull(first.get("temperatureC"));
+        assertNull(first.get("rainProbability"));
+        assertFalse((Boolean) second.get("isAvailable"));
         verify(restTemplate, times(1)).exchange(
                 anyString(),
                 eq(HttpMethod.GET),

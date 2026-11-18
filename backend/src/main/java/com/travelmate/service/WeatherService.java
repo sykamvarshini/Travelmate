@@ -53,9 +53,11 @@ public class WeatherService {
     private final Map<String, CompletableFuture<Map<String, Object>>> inFlightForecasts = new ConcurrentHashMap<>();
     private final AtomicLong rateLimitUntilMillis = new AtomicLong();
     private final AtomicLong nextRequestAllowedMillis = new AtomicLong();
+    private final AtomicLong failureBackoffMillis = new AtomicLong(Duration.ofSeconds(2).toMillis());
     private static final long CACHE_TTL_MS = Duration.ofHours(6).toMillis();
     private static final long MAX_STALE_CACHE_AGE_MS = Duration.ofHours(24).toMillis();
     private static final long MIN_REQUEST_INTERVAL_MS = Duration.ofSeconds(1).toMillis();
+    private static final long MAX_FAILURE_BACKOFF_MS = Duration.ofMinutes(1).toMillis();
     private static final ZoneId FORECAST_ZONE = ZoneId.of("Asia/Kolkata");
 
     public WeatherService(RestTemplate restTemplate) {
@@ -65,15 +67,29 @@ public class WeatherService {
     /**
      * Gets the 16-day daily weather forecast for a specific location.
      */
-    @Nullable
     public Map<String, Object> getWeatherForecast(double lat, double lon) {
+        String cacheKey = coordinateKey(lat, lon);
         Map<String, Object> response = loadForecast(lat, lon);
+        boolean usingStaleForecast = false;
         if (response == null) {
-            CacheEntry cached = weatherCache.get(coordinateKey(lat, lon));
-            response = cached != null && System.currentTimeMillis() - cached.timestamp < MAX_STALE_CACHE_AGE_MS
-                    ? cached.data : null;
+            CacheEntry cached = weatherCache.get(cacheKey);
+            usingStaleForecast = cached != null
+                    && System.currentTimeMillis() - cached.timestamp < MAX_STALE_CACHE_AGE_MS;
+            response = usingStaleForecast ? cached.data : null;
         }
-        return response != null ? new HashMap<>(response) : null;
+        if (response == null) {
+            return createUnavailableForecast();
+        }
+
+        Map<String, Object> result = new HashMap<>(response);
+        CacheEntry forecastEntry = weatherCache.get(cacheKey);
+        result.put("isAvailable", true);
+        result.put("isStale", usingStaleForecast);
+        result.put("forecastTimestamp", forecastEntry != null ? forecastEntry.timestamp : null);
+        result.put("forecastMessage", usingStaleForecast
+                ? "Live weather temporarily unavailable — showing cached forecast."
+                : null);
+        return result;
     }
 
     /**
@@ -116,6 +132,8 @@ public class WeatherService {
         if (response != null) {
             Map<String, Object> result = processWeatherResponse(response, targetDate, today);
             if (result != null) {
+                CacheEntry forecastEntry = weatherCache.get(cacheKey);
+                result.put("forecastTimestamp", forecastEntry != null ? forecastEntry.timestamp : null);
                 if (usingStaleForecast) {
                     result.put("isStale", true);
                     result.put("isLive", false);
@@ -176,11 +194,13 @@ public class WeatherService {
             if (body != null && !body.isEmpty()) {
                 result = new HashMap<>(body);
                 weatherCache.put(cacheKey, new CacheEntry(result, System.currentTimeMillis()));
+                failureBackoffMillis.set(Duration.ofSeconds(2).toMillis());
             }
         } catch (HttpClientErrorException.TooManyRequests e) {
             applyRateLimit(e.getResponseHeaders());
             log.warn("Open-Meteo rate limit reached; suppressing forecast requests until cooldown expires.");
         } catch (Exception e) {
+            applyFailureBackoff();
             log.warn("Open-Meteo weather fetch failed for ({}, {}): {}", lat, lon, e.getMessage());
         } finally {
             request.complete(result);
@@ -232,6 +252,22 @@ public class WeatherService {
         }
         cooldown = Math.max(Duration.ofSeconds(60).toMillis(), Math.min(cooldown, Duration.ofHours(24).toMillis()));
         rateLimitUntilMillis.set(now + cooldown);
+    }
+
+    private void applyFailureBackoff() {
+        long backoff = failureBackoffMillis.getAndUpdate(current ->
+                Math.min(current * 2, MAX_FAILURE_BACKOFF_MS));
+        rateLimitUntilMillis.set(System.currentTimeMillis() + backoff);
+    }
+
+    private static Map<String, Object> createUnavailableForecast() {
+        Map<String, Object> unavailable = new HashMap<>();
+        unavailable.put("isAvailable", false);
+        unavailable.put("isStale", false);
+        unavailable.put("forecastMessage", "Live weather temporarily unavailable");
+        unavailable.put("daily", null);
+        unavailable.put("current", null);
+        return unavailable;
     }
 
     private static long nextDailyResetMillis() {
@@ -310,6 +346,10 @@ public class WeatherService {
                 }
 
                 String condition = weatherCode != null ? getWeatherDescription(weatherCode) : "Forecast Temporarily Unavailable";
+                if (temp == null && minTemp == null && rainProb == null && dailyPrecipSumMm == null
+                        && currentPrecipRate == null && weatherCode == null) {
+                    return null;
+                }
 
                 Map<String, Object> ret = new HashMap<>();
                 ret.put("temperatureC", temp != null ? Math.round(temp * 10.0) / 10.0 : null);
@@ -355,6 +395,9 @@ public class WeatherService {
             }
 
             String condition = weatherCode != null ? getWeatherDescription(weatherCode) : "Forecast Temporarily Unavailable";
+            if (temp == null && precipMm == null && extractedProb == null && weatherCode == null) {
+                return null;
+            }
 
             Map<String, Object> ret = new HashMap<>();
             ret.put("temperatureC", temp != null ? Math.round(temp * 10.0) / 10.0 : null);
